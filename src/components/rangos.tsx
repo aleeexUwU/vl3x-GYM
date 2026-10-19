@@ -141,9 +141,9 @@ export function PanelRangos({ rangos }: { rangos: Rangos }) {
           ))}
         </ul>
         <p className="text-xs text-muted-foreground">
-          Todo el mundo empieza en Hierro. Subes con constancia y mejora real: cuánto ha crecido tu fuerza (1RM estimado) en
-          cada ejercicio desde la primera vez y cuántas sesiones llevas con él. En el core cuentan las reps o segundos que
-          completas y pasar a variantes más difíciles.
+          Todo el mundo empieza en Hierro y subes solo mejorando respecto a la primera vez: en el gimnasio, más peso o más
+          repeticiones (1RM estimado); en el core, más repeticiones o segundos completados y variantes más difíciles. Ir sin
+          mejorar no sube de rango.
         </p>
       </Glass>
       <Glass className="space-y-2">
@@ -171,8 +171,8 @@ export function PanelRangos({ rangos }: { rangos: Rangos }) {
                   {ejercicio(r.exerciseId).modulo === "abdominales" ? "Core" : `1RM estimado ${Math.round(r.fuerza)} kg`} · {r.mejora >= 1 ? "+" : ""}
                   {Math.round((r.mejora - 1) * 100)} % · {r.sesiones} {r.sesiones === 1 ? "sesión" : "sesiones"}
                 </span>
-                {requisitoSiguiente(r, r.mejora, r.sesiones) && (
-                  <span className="block text-[11px] text-muted-foreground">Para {requisitoSiguiente(r, r.mejora, r.sesiones)}</span>
+                {requisitoSiguiente(r, r.mejora, ejercicio(r.exerciseId).modulo === "abdominales") && (
+                  <span className="block text-[11px] text-muted-foreground">Para {requisitoSiguiente(r, r.mejora, ejercicio(r.exerciseId).modulo === "abdominales")}</span>
                 )}
               </span>
               <InsigniaRango nivel={r} />

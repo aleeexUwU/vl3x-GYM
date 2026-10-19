@@ -4,14 +4,13 @@ import { fuerzaEstimada, type ExerciseLog } from "./progression";
 import type { MuscleGroup } from "./types";
 
 /**
- * Sistema de rangos (idea de apps como Symmetry), basado en TU progreso: todo el mundo
- * empieza en Hierro y se sube con dos cosas a la vez, para que cuente la constancia y no
- * un día bueno:
- *  - mejora de fuerza en el ejercicio (1RM estimado, con reps en reserva) desde la primera
- *    sesión;
- *  - número de sesiones con ese ejercicio.
- * No compara con pesos "estándar": las máquinas y poleas cambian mucho entre gimnasios.
- * Cada músculo toma el mejor rango de sus ejercicios; el general es la media.
+ * Sistema de rangos (idea de apps como Symmetry), basado SOLO en tu rendimiento: todo el
+ * mundo empieza en Hierro y sube cuanto más mejora respecto a la primera vez.
+ *  - Gimnasio: 1RM estimado (peso y repeticiones, con reps en reserva).
+ *  - Core: repeticiones o segundos completados, y cada variante más difícil vale más.
+ * Ir muchas veces sin mejorar no sube de rango. No compara con pesos "estándar": las
+ * máquinas y poleas cambian mucho entre gimnasios. Cada músculo toma el mejor rango de
+ * sus ejercicios (el core, la media de sus progresiones); el general es la media.
  */
 
 export const RANGOS = ["Hierro", "Bronce", "Plata", "Oro", "Platino", "Diamante", "Élite"] as const;
@@ -19,8 +18,6 @@ export type Rango = (typeof RANGOS)[number];
 
 /** Mejora de fuerza (actual / primera) necesaria para cada rango. */
 const MEJORA = [1, 1.05, 1.15, 1.3, 1.5, 1.75, 2.1];
-/** Sesiones con el ejercicio necesarias para cada rango. */
-const SESIONES = [0, 2, 4, 7, 11, 16, 24];
 
 export interface Nivel {
   rango: Rango;
@@ -49,19 +46,18 @@ export function nivelDe(puntuacion: number): Nivel {
   return { rango: RANGOS[indice], indice, puntuacion: p, progreso: indice >= max ? 1 : p - indice };
 }
 
-/** Nivel de un ejercicio: el menor entre lo que da la mejora y lo que dan las sesiones. */
-export function nivelEjercicio(mejora: number, sesiones: number): Nivel {
-  return nivelDe(Math.min(enEscala(mejora, MEJORA), enEscala(sesiones, SESIONES)));
+/** Nivel de un ejercicio: solo por cuánto ha mejorado el rendimiento. */
+export function nivelEjercicio(mejora: number): Nivel {
+  return nivelDe(enEscala(mejora, MEJORA));
 }
 
 /** Qué falta para el siguiente rango (texto corto para la interfaz). */
-export function requisitoSiguiente(n: Nivel, mejora: number, sesiones: number): string | null {
+export function requisitoSiguiente(n: Nivel, mejora: number, core = false): string | null {
   const sig = n.indice + 1;
   if (sig >= RANGOS.length) return null;
-  const faltas: string[] = [];
-  if (mejora < MEJORA[sig]) faltas.push(`+${Math.round((MEJORA[sig] - 1) * 100)} % de fuerza (llevas +${Math.round((mejora - 1) * 100)} %)`);
-  if (sesiones < SESIONES[sig]) faltas.push(`${SESIONES[sig]} sesiones (llevas ${sesiones})`);
-  return faltas.length ? `${RANGOS[sig]}: ${faltas.join(" y ")}` : null;
+  if (mejora >= MEJORA[sig]) return null;
+  const que = core ? "más reps/segundos o una variante más difícil" : "más peso o más reps";
+  return `${RANGOS[sig]}: +${Math.round((MEJORA[sig] - 1) * 100)} % (llevas +${Math.round((mejora - 1) * 100)} %): ${que}`;
 }
 
 export interface RangoEjercicio extends Nivel {
@@ -118,7 +114,7 @@ function rangosCore(sesiones: SesionCore[], hasta?: string): RangoEjercicio[] {
     const fuerza = Math.max(...orden.map((r) => r.puntos));
     const mejora = primera > 0 ? fuerza / primera : 1;
     const sesionesN = new Set(orden.map((r) => r.fecha)).size;
-    out.push({ exerciseId: orden[orden.length - 1].actual, fuerza, mejora, sesiones: sesionesN, ...nivelEjercicio(mejora, sesionesN) });
+    out.push({ exerciseId: orden[orden.length - 1].actual, fuerza, mejora, sesiones: sesionesN, ...nivelEjercicio(mejora) });
   }
   return out;
 }
@@ -139,7 +135,7 @@ export function calcularRangos(logs: ExerciseLog[], hasta?: string, core: Sesion
     const fuerza = Math.max(...orden.map(fuerzaEstimada));
     const mejora = primera > 0 ? fuerza / primera : 1;
     const sesiones = new Set(orden.map((l) => l.fecha)).size;
-    ejercicios.push({ exerciseId: id, fuerza, mejora, sesiones, ...nivelEjercicio(mejora, sesiones) });
+    ejercicios.push({ exerciseId: id, fuerza, mejora, sesiones, ...nivelEjercicio(mejora) });
   }
   const musculos: Partial<Record<MuscleGroup, Nivel>> = {};
   for (const g of GRUPOS_GIMNASIO) {
