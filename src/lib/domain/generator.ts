@@ -15,6 +15,7 @@ import type {
   Plan,
   PlanDay,
   PlannedExercise,
+  RangoReps,
   Weekday,
 } from "./types";
 
@@ -35,6 +36,8 @@ export interface GeneratorInput {
   evitarMancuernas?: boolean;
   /** "superior": más series de torso y brazo, y se entrenan primero; pierna con menos volumen. */
   prioridad?: Prioridad;
+  /** Rango de repeticiones preferido (por defecto el de cada ejercicio). */
+  rangoReps?: RangoReps;
   id?: string;
   creadoEn?: string;
 }
@@ -164,13 +167,32 @@ const NOMBRE_ENFOQUE: Record<DayFocus, string> = {
   pierna: "Pierna y lumbar",
 };
 
-/** Series, reps, descanso y RIR según objetivo y experiencia. */
+/** Músculos pequeños: con muy pocas reps se pierde técnica y sufren las articulaciones. */
+const GRUPOS_PEQUENOS: MuscleGroup[] = ["hombro_lateral", "hombro_posterior", "antebrazo", "gemelos", "abductores", "aductores"];
+
+const RANGOS: Record<Exclude<RangoReps, "auto">, { min: number; max: number; pequeno: [number, number]; descanso: number }> = {
+  pesado: { min: 6, max: 8, pequeno: [8, 10], descanso: 150 },
+  medio: { min: 8, max: 12, pequeno: [10, 15], descanso: 105 },
+  ligero: { min: 12, max: 15, pequeno: [15, 20], descanso: 75 },
+};
+
+/** Series, reps, descanso y RIR según objetivo, experiencia y rango preferido. */
 export function prescripcion(
   e: Exercise,
   objetivo: Goal,
   experiencia: Experience,
+  rangoReps: RangoReps = "auto",
 ): Pick<PlannedExercise, "repsMin" | "repsMax" | "descansoSeg" | "rir"> {
   let { repsMin, repsMax, descansoSeg } = e;
+  if (e.medida === "reps" && rangoReps !== "auto" && e.cargaInicial != null) {
+    // Rango elegido por la persona (solo en ejercicios con peso).
+    const r = RANGOS[rangoReps];
+    const pequeno = Object.entries(e.musculos).some(([g, w]) => (w ?? 0) >= 1 && GRUPOS_PEQUENOS.includes(g as MuscleGroup));
+    [repsMin, repsMax] = pequeno ? r.pequeno : [r.min, r.max];
+    descansoSeg = e.compuesto ? r.descanso : Math.round(r.descanso * 0.7);
+    const rir = experiencia === "principiante" ? 2 : 1;
+    return { repsMin, repsMax, descansoSeg, rir };
+  }
   if (e.medida === "reps") {
     if (objetivo === "fuerza" && e.compuesto) {
       repsMin = Math.max(5, repsMin - 3);
@@ -349,7 +371,7 @@ function aPlanDay(s: Sesion, i: number, input: GeneratorInput): PlanDay {
   const ejercicios: PlannedExercise[] = ordenar(s.items, input.biseries ?? true, input.prioridad).map(({ item: it, biserie }) => ({
     exerciseId: it.ex.id,
     series: it.series,
-    ...prescripcion(it.ex, input.objetivo, input.experiencia),
+    ...prescripcion(it.ex, input.objetivo, input.experiencia, input.rangoReps),
     ...(biserie ? { biserie } : {}),
     ...(it.ultimoRecurso || it.ex.smith
       ? { ultimoRecurso: true, alternativaPreferida: it.ex.alternativaPreferida }

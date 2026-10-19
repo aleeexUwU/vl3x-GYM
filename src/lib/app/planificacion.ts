@@ -46,6 +46,7 @@ export function entradaGenerador(
     biseries: ajustes.biseries,
     evitarMancuernas: ajustes.evitarMancuernas,
     prioridad: ajustes.prioridad,
+    rangoReps: ajustes.rangoReps ?? "auto",
     coberturaCasa: coberturaAbdominalesSemana(
       inicioSemana(hoy),
       ajustes.inicioAbdominales,

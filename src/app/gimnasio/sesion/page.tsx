@@ -26,6 +26,7 @@ import { ExerciseImage } from "@/components/exercise/exercise-image";
 import { Kakugan } from "@/components/kakugan";
 import { ConsejosSheet, NotaEjercicio, TecnicaSheet } from "@/components/exercise/technique";
 import { Calentamiento } from "@/components/gym/calentamiento";
+import { Dropset } from "@/components/gym/dropset";
 import { MaquinaDialog } from "@/components/gym/maquina-dialog";
 import { SustituirDialog } from "@/components/gym/sustituir-dialog";
 import { FlashSangre } from "@/components/flash-sangre";
@@ -40,6 +41,7 @@ import { useAjustes, usePerfil, usePesosMaquina, useWorkout, useWorkouts } from 
 import type { Workout, WorkoutExercise, WorkoutSet } from "@/lib/db/types";
 import { ejercicio } from "@/lib/domain/exercises";
 import {
+  ajusteSiguienteSerie,
   ajustarAMaquina,
   e1rm,
   incrementoPara,
@@ -160,6 +162,8 @@ function Sesion() {
   const maquina = pesosMaquina?.[e.id];
   const paso = maquina?.paso ?? PASO_STEPPER[e.tipoCarga];
   const conPeso = e.cargaInicial != null;
+  const dropsetAplica = !!ajustes.dropset && conPeso && e.medida === "reps" && ["maquina", "polea", "mancuerna"].includes(e.tipoCarga);
+  const ultimaSerie = ej.series[ej.series.length - 1];
   const pareja = ej.biserie
     ? workout.ejercicios.findIndex((x, i) => i !== idx && x.biserie === ej.biserie)
     : -1;
@@ -170,6 +174,12 @@ function Sesion() {
     const yaEstaba = ej!.series[s].hecho;
     const incr = incrementoPara(e.tipoCarga, incrementosCon(e.tipoCarga, ajustes!.incrementos, maquina));
     let siguiente: Workout | null = null;
+    // Fuera de la calibración, la siguiente serie se ajusta a lo que acabas de hacer.
+    const ajuste =
+      ej!.estado !== "calibracion" && borrador.pesoKg != null
+        ? ajusteSiguienteSerie(borrador.pesoKg, borrador.reps ?? null, borrador.rir ?? null, { repsMin: ej!.repsMin, repsMax: ej!.repsMax }, incr)
+        : null;
+    let ajustadas = 0;
     await mutarWorkout(workout.id, (w) => {
       const x = w.ejercicios[idx];
       x.series[s] = { ...x.series[s], ...borrador, hecho: true, hora: new Date().toISOString() };
@@ -186,7 +196,9 @@ function Sesion() {
           );
           sig.objetivoPeso = sig.pesoKg;
         } else if (sig.pesoKg === sig.objetivoPeso) {
-          sig.pesoKg = borrador.pesoKg;
+          sig.pesoKg = ajustarAMaquina(ajuste?.pesoKg ?? borrador.pesoKg, maquina);
+          sig.objetivoPeso = sig.pesoKg;
+          ajustadas++;
         }
       }
       siguiente = w;
@@ -209,8 +221,22 @@ function Sesion() {
         }
       }
     }
+    if (!yaEstaba && ajuste?.motivo && ajustadas > 0) {
+      const nuevo = ajustarAMaquina(ajuste.pesoKg, maquina);
+      toast(`Siguiente serie: ${String(nuevo).replace(".", ",")} kg`, { description: `Ajustado porque ${ajuste.motivo}.` });
+    }
     if (yaEstaba || !siguiente) return;
-    const w = siguiente as Workout;
+    // Última serie con dropset: se queda aquí hasta hacerlo o saltarlo.
+    if (dropsetAplica && s === ej!.series.length - 1) {
+      // Se fija este ejercicio: si no, la sesión saltaría al siguiente con series pendientes.
+      setIdx(idx);
+      return;
+    }
+    continuar(siguiente as Workout);
+  }
+
+  /** Tras terminar una serie (o el dropset): biserie, descanso o siguiente ejercicio. */
+  function continuar(w: Workout) {
     const actual = w.ejercicios[idx];
     const quedanAqui = pendientes(actual) > 0;
     const p = pareja >= 0 ? w.ejercicios[pareja] : null;
@@ -241,6 +267,20 @@ function Sesion() {
       total: descansoSeg,
       etiqueta: `Siguiente: ${ejercicio(w.ejercicios[otro].exerciseId).nombre}`,
     });
+  }
+
+  async function guardarDrop(drop: NonNullable<WorkoutSet["drop"]>) {
+    let w: Workout | null = null;
+    await mutarWorkout(workout!.id, (x) => {
+      const ult = x.ejercicios[idx!].series.at(-1);
+      if (ult) ult.drop = drop;
+      w = x;
+    });
+    if (!drop.omitido) {
+      toque(30);
+      setFlash((f) => f + 1);
+    }
+    if (w) continuar(w);
   }
 
   async function cambiarSeries(delta: 1 | -1) {
@@ -513,6 +553,20 @@ function Sesion() {
               );
             })}
           </ol>
+          {dropsetAplica && ultimaSerie?.hecho && !ultimaSerie.drop && (
+            <Dropset
+              key={`${workout.id}-${idx}`}
+              pesoSugerido={ajustarAMaquina(redondearPeso((ultimaSerie.pesoKg ?? 0) * 0.75), maquina)}
+              paso={paso}
+              onHecho={(pesoKg, reps) => guardarDrop({ pesoKg, reps })}
+              onSaltar={() => guardarDrop({ pesoKg: null, reps: null, omitido: true })}
+            />
+          )}
+          {ultimaSerie?.drop && !ultimaSerie.drop.omitido && (
+            <p className="text-sm text-muted-foreground">
+              Dropset: <strong className="text-foreground">{String(ultimaSerie.drop.pesoKg).replace(".", ",")} kg × {ultimaSerie.drop.reps}</strong>
+            </p>
+          )}
 
           <div className="flex items-center justify-between gap-2">
             <div className="flex gap-1.5">

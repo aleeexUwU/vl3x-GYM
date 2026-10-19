@@ -24,6 +24,8 @@ export interface WorkoutSet {
   rir: number | null;
   hecho: boolean;
   hora?: string;
+  /** Dropset tras esta serie (solo en la última). No cuenta para la progresión. */
+  drop?: { pesoKg: number | null; reps: number | null; omitido?: boolean };
 }
 
 export interface WorkoutExercise {

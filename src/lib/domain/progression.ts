@@ -86,9 +86,9 @@ export function pesoTrabajo(l: ExerciseLog): number | null {
  * La calibración termina cuando hay una serie dentro del rango con 1–4 reps en
  * reserva (o sin RIR anotado). Devuelve el peso de partida o null si aún no.
  */
-export function pesoCalibrado(l: ExerciseLog): number | null {
+export function pesoCalibrado(l: ExerciseLog, rango: { repsMin: number; repsMax: number } = l): number | null {
   const validas = seriesHechas(l).filter(
-    (s) => s.reps! >= l.repsMin && s.reps! <= l.repsMax + 2 && (s.rir == null || (s.rir >= 1 && s.rir <= 4)),
+    (s) => s.reps! >= rango.repsMin && s.reps! <= rango.repsMax + 2 && (s.rir == null || (s.rir >= 1 && s.rir <= 4)),
   );
   if (validas.length === 0) return null;
   // Preferimos las series con 2–3 RIR, que es lo que pide la calibración.
@@ -101,6 +101,26 @@ export function pesoCalibrado(l: ExerciseLog): number | null {
 /** e1RM de Epley para comparar rendimiento entre sesiones. */
 export function e1rm(peso: number, reps: number): number {
   return peso * (1 + reps / 30);
+}
+
+/**
+ * Peso que encaja en un rango a partir de un 1RM estimado: el que permitiría hacer
+ * repsMax + 1 repeticiones al fallo (así el rango se hace con 1–3 en reserva).
+ */
+export function pesoParaRango(unoRm: number, rango: { repsMin: number; repsMax: number }): number {
+  return redondearPeso(unoRm / (1 + (rango.repsMax + 1) / 30));
+}
+
+/**
+ * Fuerza estimada (1RM) contando las repeticiones en reserva anotadas (RIR, hasta 4):
+ * 50 kg × 8 con 2 en reserva ≈ 50 kg × 10 al fallo.
+ */
+export function fuerzaEstimada(l: ExerciseLog): number {
+  let best = 0;
+  for (const s of seriesHechas(l)) {
+    if (s.pesoKg != null && s.pesoKg > 0) best = Math.max(best, e1rm(s.pesoKg, s.reps! + Math.min(4, s.rir ?? 0)));
+  }
+  return best;
 }
 
 export function mejorE1rm(l: ExerciseLog): number {
@@ -157,7 +177,7 @@ export function sugerirCarga(
   // ¿Hay ya un peso calibrado?
   let calibrado: number | null = null;
   for (const l of logs) {
-    const c = pesoCalibrado(l);
+    const c = pesoCalibrado(l, rango);
     if (c != null) {
       calibrado = c;
       break;
@@ -176,6 +196,20 @@ export function sugerirCarga(
       };
     }
     const hechas = seriesHechas(ultimo);
+    // Con series reales con peso se adapta a lo que hiciste (aunque fuera fuera de rango),
+    // en vez de ir subiendo o bajando a ciegas.
+    const fuerza = fuerzaEstimada(ultimo);
+    // Si todo fue muy ligero (más de 4 en reserva), la estimación no es fiable: se sigue calibrando.
+    const pocoFiable = hechas.every((s) => s.rir != null && s.rir > 4);
+    if (fuerza > 0 && !pocoFiable) {
+      const nuevo = pesoParaRango(fuerza, rango);
+      return {
+        estado: "mantener",
+        pesoKg: nuevo,
+        repsObjetivo: rango.repsMin,
+        mensaje: `Ajustado a lo que hiciste la última vez (1RM estimado ${Math.round(fuerza)} kg): ${nuevo} kg para ${rango.repsMin}–${rango.repsMax} reps.`,
+      };
+    }
     const pesoUlt = pesoTrabajo(ultimo) ?? inicial;
     const demasiadoLigero = hechas.every((s) => s.reps! > rango.repsMax || (s.rir != null && s.rir > 4));
     const nuevo = redondearPeso(demasiadoLigero ? pesoUlt + paso * 2 : Math.max(0, pesoUlt - paso));
@@ -192,6 +226,25 @@ export function sugerirCarga(
   const ultimo = logs.at(-1)!;
   const W = pesoTrabajo(ultimo) ?? calibrado;
   const hechas = seriesHechas(ultimo).filter((s) => (s.pesoKg ?? 0) >= W);
+
+  // Si cambiaste de rango o la última vez te salieron muchas más reps de las previstas,
+  // el peso se recalcula con tu fuerza real en vez de subir solo un escalón.
+  const cambioRango = ultimo.repsMin !== rango.repsMin || ultimo.repsMax !== rango.repsMax;
+  const muySobrado = hechas.length > 0 && hechas.every((s) => s.reps! >= rango.repsMax + 3);
+  if (cambioRango || muySobrado) {
+    const fuerza = fuerzaEstimada(ultimo);
+    const nuevo = pesoParaRango(fuerza, rango);
+    if (fuerza > 0 && nuevo !== W) {
+      return {
+        estado: nuevo > W ? "subir" : "mantener",
+        pesoKg: nuevo,
+        repsObjetivo: rango.repsMin,
+        mensaje: cambioRango
+          ? `Nuevo rango ${rango.repsMin}–${rango.repsMax}: con tu fuerza (1RM estimado ${Math.round(fuerza)} kg) te toca ${nuevo} kg.`
+          : `Te sobraron muchas reps: sube a ${nuevo} kg (1RM estimado ${Math.round(fuerza)} kg).`,
+      };
+    }
+  }
   const todasTope = hechas.length > 0 && hechas.every((s) => s.reps! >= rango.repsMax);
   if (todasTope && ultimo.buenaTecnica) {
     const nuevo = redondearPeso(W + paso);
@@ -365,4 +418,28 @@ export function seriesCalentamiento(pesoTrabajo: number | null, paso: number, m?
     if (medio > ligero && medio < pesoTrabajo) out.push({ pesoKg: medio, reps: 5 });
   }
   return out;
+}
+
+/**
+ * Ajuste serie a serie (como hacen apps tipo Symmetry): según lo que acabas de hacer,
+ * el peso de la siguiente serie.
+ * - Te sobraron 2+ reps sobre el tope (o 4+ en reserva llegando al tope) → sube un escalón.
+ * - No llegaste al mínimo sin reservas → baja un escalón.
+ * - Si no, el mismo peso.
+ */
+export function ajusteSiguienteSerie(
+  usado: number,
+  reps: number | null,
+  rir: number | null,
+  rango: { repsMin: number; repsMax: number },
+  incr: number,
+): { pesoKg: number; motivo: string | null } {
+  if (reps == null) return { pesoKg: usado, motivo: null };
+  if (reps >= rango.repsMax + 2 || (reps >= rango.repsMax && rir != null && rir >= 4)) {
+    return { pesoKg: redondearPeso(usado + incr), motivo: "te sobraron repeticiones" };
+  }
+  if (reps < rango.repsMin && (rir == null || rir <= 1)) {
+    return { pesoKg: redondearPeso(Math.max(0, usado - incr)), motivo: `no llegaste a ${rango.repsMin}` };
+  }
+  return { pesoKg: usado, motivo: null };
 }

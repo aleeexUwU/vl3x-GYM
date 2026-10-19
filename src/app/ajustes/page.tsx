@@ -23,7 +23,7 @@ import { tieneManoLimitada } from "@/lib/domain/limitations";
 import { LimitacionesEditor } from "@/components/limitaciones-editor";
 import { objetivosDiarios, type AjustesDieta } from "@/lib/domain/nutrition/objetivos";
 import { EQUIPO_NOMBRE } from "@/lib/domain/muscles";
-import type { Equipment, Experience, Goal, Profile, Settings, Sex, Weekday } from "@/lib/domain/types";
+import type { Equipment, Experience, Goal, Profile, Settings, Sex, Weekday, RangoReps } from "@/lib/domain/types";
 
 function Fila({ titulo, children, ayuda }: { titulo: string; children: React.ReactNode; ayuda?: string }) {
   return (
@@ -157,6 +157,36 @@ export default function Ajustes() {
 
       <Glass className="space-y-5">
         <SectionTitle>Volumen y progresión</SectionTitle>
+        <Fila
+          titulo="Repeticiones"
+          ayuda={
+            (ajustes.rangoReps ?? "auto") === "pesado"
+              ? "6–8 reps con más peso (en laterales, posteriores, antebrazo, gemelos y aductores/abductores, 8–10 para cuidar las articulaciones). Descansos más largos."
+              : (ajustes.rangoReps ?? "auto") === "auto"
+                ? "Cada ejercicio con su rango recomendado."
+                : undefined
+          }
+        >
+          <Chips<RangoReps>
+            valor={ajustes.rangoReps ?? "auto"}
+            onChange={(v) => ajustesYRegenerar({ rangoReps: v as RangoReps })}
+            opciones={[
+              { valor: "pesado", etiqueta: "Pesado 6–8" },
+              { valor: "medio", etiqueta: "Medio 8–12" },
+              { valor: "ligero", etiqueta: "Ligero 12–15" },
+              { valor: "auto", etiqueta: "Según ejercicio" },
+            ]}
+          />
+        </Fila>
+        <label className="flex items-center justify-between gap-3 text-sm">
+          <span>
+            Dropset en la última serie
+            <span className="block text-xs text-muted-foreground">
+              En máquinas, poleas y mancuernas: al acabar, sin descansar, baja ~25 % el peso y sigue hasta el fallo.
+            </span>
+          </span>
+          <Switch checked={!!ajustes.dropset} onCheckedChange={(v) => guardarAjustes({ dropset: v })} />
+        </label>
         <Fila titulo="Prioridad">
           <Chips<Settings["prioridad"]>
             valor={ajustes.prioridad}

@@ -166,3 +166,38 @@ describe("pesos de máquina y calentamiento", () => {
     expect(seriesCalentamiento(null, 5)).toEqual([]);
   });
 });
+
+describe("se adapta a lo que levantas de verdad", () => {
+  const pesado = { repsMin: 6, repsMax: 8 };
+  it("calibrando, si haces 6-8 pesadas fuera del rango previsto, ajusta en vez de bajar a ciegas", () => {
+    // Rango previsto 10-15, pero hizo 30 kg × 7 con 1 en reserva.
+    const s = sugerirCarga(press, { repsMin: 10, repsMax: 15 }, [log("2026-10-10", [[30, 7, 1], [30, 7, 1]], { repsMin: 10, repsMax: 15 })], INCREMENTOS_POR_DEFECTO, perfil);
+    expect(s.estado).toBe("mantener");
+    expect(s.pesoKg).toBeGreaterThan(20);
+    expect(s.pesoKg).toBeLessThan(30);
+  });
+  it("al pasar a rango pesado (6-8) sube el peso según la fuerza real", () => {
+    // Venía haciendo 20 kg × 12 en rango 8-12.
+    const logs = [log("2026-10-01", [[20, 10, 2]]), log("2026-10-08", [[20, 12, 2], [20, 12, 2]])];
+    const s = sugerirCarga(press, pesado, logs, INCREMENTOS_POR_DEFECTO, perfil);
+    expect(s.pesoKg).toBeGreaterThan(20);
+    expect(s.mensaje).toMatch(/Nuevo rango 6–8/);
+  });
+  it("en rango pesado, la doble progresión sube al llegar a 8 en todas", () => {
+    const logs = [log("2026-10-08", [[30, 7, 2]], pesado), log("2026-10-12", [[30, 8, 1], [30, 8, 1]], pesado)];
+    const s = sugerirCarga(press, pesado, logs, INCREMENTOS_POR_DEFECTO, perfil);
+    expect(s.estado).toBe("subir");
+    expect(s.pesoKg).toBe(32);
+  });
+});
+
+describe("ajuste serie a serie", () => {
+  it("sube si sobran reps, baja si no llegas y mantiene si estás en rango", async () => {
+    const { ajusteSiguienteSerie } = await import("../progression");
+    const r = { repsMin: 6, repsMax: 8 };
+    expect(ajusteSiguienteSerie(40, 10, null, r, 5)).toEqual({ pesoKg: 45, motivo: "te sobraron repeticiones" });
+    expect(ajusteSiguienteSerie(40, 4, 0, r, 5).pesoKg).toBe(35);
+    expect(ajusteSiguienteSerie(40, 7, 2, r, 5)).toEqual({ pesoKg: 40, motivo: null });
+    expect(ajusteSiguienteSerie(40, 5, 3, r, 5).pesoKg).toBe(40); // no llegó pero con reservas: mismo peso
+  });
+});
