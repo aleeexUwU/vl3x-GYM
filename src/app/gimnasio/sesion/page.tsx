@@ -29,7 +29,7 @@ import { Calentamiento } from "@/components/gym/calentamiento";
 import { Dropset } from "@/components/gym/dropset";
 import { InsigniaRango } from "@/components/rangos";
 import { GRUPO_NOMBRE } from "@/lib/domain/muscles";
-import { calcularRangos, subidas } from "@/lib/domain/rangos";
+import { calcularRangos, subidas, ZONA_NOMBRE, type Zona } from "@/lib/domain/rangos";
 import type { MuscleGroup } from "@/lib/domain/types";
 import { MaquinaDialog } from "@/components/gym/maquina-dialog";
 import { SustituirDialog } from "@/components/gym/sustituir-dialog";
@@ -41,7 +41,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Aviso, Cargando, Chips, Glass, Stat, Stepper } from "@/components/ui-kit";
 import { anadirExtra, completarWorkout, hacerLuego, logsDeWorkouts, mutarWorkout, sustituirEnWorkout, tocaCalentar } from "@/lib/app/gimnasio";
 import { filtroGimnasio, marcarDolorEnPlan, sustituirEnPlanGuardado } from "@/lib/app/planificacion";
-import { useAbsSessions, useAjustes, usePerfil, usePesosMaquina, usePlan, useWorkout, useWorkouts } from "@/lib/db/hooks";
+import { useAbsSessions, useAjustes, useBodyweights, usePerfil, usePesosMaquina, usePlan, useWorkout, useWorkouts } from "@/lib/db/hooks";
 import { elegirExtra } from "@/lib/domain/extra";
 import type { Workout, WorkoutExercise, WorkoutSet } from "@/lib/db/types";
 import { ejercicio } from "@/lib/domain/exercises";
@@ -737,6 +737,7 @@ function SerieEditor({
 
 function Resumen({ workout, previos }: { workout: Workout; previos: ReturnType<typeof logsDeWorkouts> }) {
   const absRes = (useAbsSessions() ?? []).filter((s) => !s._deleted);
+  const pesosRes = (useBodyweights() ?? []).filter((p) => !p._deleted);
   const planRes = usePlan();
   const perfilRes = usePerfil();
   const ajustesRes = useAjustes();
@@ -783,23 +784,29 @@ function Resumen({ workout, previos }: { workout: Workout; previos: ReturnType<t
         <Stat etiqueta="Tiempo" valor={minutos ?? "—"} detalle="min" color="lime" />
       </div>
       {(() => {
-          const antes = calcularRangos(previos.filter((l) => l.fecha <= workout.fecha), undefined, absRes);
-          const despues = calcularRangos([...previos.filter((l) => l.fecha <= workout.fecha), ...logsDeWorkouts([workout])], undefined, absRes);
+          const antes = calcularRangos(previos.filter((l) => l.fecha <= workout.fecha), { core: absRes, pesos: pesosRes });
+          const despues = calcularRangos([...previos.filter((l) => l.fecha <= workout.fecha), ...logsDeWorkouts([workout])], { core: absRes, pesos: pesosRes });
           const lista = subidas(antes, despues);
           if (!lista.length) return null;
           const nombre = (s: (typeof lista)[number]) =>
-            s.tipo === "general" ? "Rango general" : s.tipo === "musculo" ? GRUPO_NOMBRE[s.id as MuscleGroup] : ejercicio(s.id).nombre;
+            s.tipo === "general"
+              ? "Rango general"
+              : s.tipo === "zona"
+                ? ZONA_NOMBRE[s.id as Zona]
+                : s.tipo === "musculo"
+                  ? GRUPO_NOMBRE[s.id as MuscleGroup]
+                  : ejercicio(s.id).nombre;
           return (
             <Glass className="space-y-2">
               <p className="font-semibold">Rangos que han subido</p>
               <ul className="space-y-1.5 text-sm">
                 {lista
-                  .sort((a, b) => ["general", "musculo", "ejercicio"].indexOf(a.tipo) - ["general", "musculo", "ejercicio"].indexOf(b.tipo))
+                  .sort((a, b) => ["general", "zona", "musculo", "ejercicio"].indexOf(a.tipo) - ["general", "zona", "musculo", "ejercicio"].indexOf(b.tipo))
                   .map((s) => (
                     <li key={s.tipo + s.id} className="flex items-center justify-between gap-2">
                       <span className="min-w-0 truncate">{nombre(s)}</span>
                       <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
-                        {s.de ? `${s.de} →` : "Nuevo:"} <InsigniaRango nivel={{ rango: s.a, indice: 0, puntuacion: 0, progreso: 0 }} />
+                        {s.de ? `${s.de} →` : "Nuevo:"} <InsigniaRango nivel={s.a} />
                       </span>
                     </li>
                   ))}

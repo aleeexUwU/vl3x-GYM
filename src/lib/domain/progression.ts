@@ -72,7 +72,7 @@ export function pesoInicial(e: Exercise, perfil: Pick<Profile, "pesoKg" | "sexo"
   return redondearPeso(e.cargaInicial * f);
 }
 
-const seriesHechas = (l: ExerciseLog) => l.series.filter((s) => s.hecho && s.reps != null);
+export const seriesHechas = (l: ExerciseLog) => l.series.filter((s) => s.hecho && s.reps != null);
 
 /** Peso de trabajo de una sesión: el máximo usado en series completadas. */
 export function pesoTrabajo(l: ExerciseLog): number | null {

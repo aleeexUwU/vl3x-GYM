@@ -40,7 +40,7 @@ import {
   sustituirEnPlanGuardado,
 } from "@/lib/app/planificacion";
 import { clavesHechas } from "@/lib/app/resumen";
-import { useAbsSessions, useAjustes, useArmSessions, useEvaluacionBrazo, usePerfil, usePlan, useWorkouts } from "@/lib/db/hooks";
+import { useAbsSessions, useAjustes, useArmSessions, useBodyweights, useEvaluacionBrazo, usePerfil, usePlan, useWorkouts } from "@/lib/db/hooks";
 import { diaSemana, formatoFecha, hoyISO, inicioSemana, NOMBRE_DIA, sumarDias } from "@/lib/domain/dates";
 import { ejercicio } from "@/lib/domain/exercises";
 import { VERSION_PLAN } from "@/lib/domain/generator";
@@ -58,6 +58,7 @@ export default function Gimnasio() {
   const ev = useEvaluacionBrazo();
   const workouts = useWorkouts();
   const abs = useAbsSessions();
+  const pesosCorp = useBodyweights();
   const brazo = useArmSessions();
   const [tecnica, setTecnica] = useState<string | null>(null);
   const [sustituir, setSustituir] = useState<{ id: string; dia: PlanDay } | null>(null);
@@ -144,7 +145,7 @@ export default function Gimnasio() {
             Semana {semanas + 1} de entreno{semanas === 0 && ": calibrando tus pesos"}
           </p>
           {(() => {
-            const general = calcularRangos(logsDeWorkouts(workouts), undefined, (abs ?? []).filter((s) => !s._deleted)).general;
+            const general = calcularRangos(logsDeWorkouts(workouts), { core: (abs ?? []).filter((s) => !s._deleted), pesos: (pesosCorp ?? []).filter((p) => !p._deleted) }).general;
             return general ? (
               <Link href="/progreso/?tab=rangos" className="mt-2 inline-flex items-center gap-2 text-xs text-muted-foreground" aria-label={`Rango general: ${general.rango}. Ver rangos`}>
                 <InsigniaRango nivel={general} /> {Math.round(general.progreso * 100)} % hacia el siguiente

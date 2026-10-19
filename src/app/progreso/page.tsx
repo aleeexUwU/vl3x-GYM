@@ -82,7 +82,7 @@ function Progreso() {
         </TabsList>
 
         <TabsContent value="rangos" className="mt-4">
-          <PanelRangos rangos={calcularRangos(logsDeWorkouts(workouts), undefined, (abs ?? []).filter((s) => !s._deleted))} />
+          <PanelRangos rangos={calcularRangos(logsDeWorkouts(workouts), { core: (abs ?? []).filter((s) => !s._deleted), pesos: (pesos ?? []).filter((p) => !p._deleted) })} />
         </TabsContent>
 
         <TabsContent value="resumen" className="mt-4 space-y-4">

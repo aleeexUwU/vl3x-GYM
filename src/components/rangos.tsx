@@ -6,7 +6,7 @@ import { useEffect, useRef } from "react";
 import { Glass, SectionTitle } from "@/components/ui-kit";
 import { ejercicio } from "@/lib/domain/exercises";
 import { GRUPO_NOMBRE } from "@/lib/domain/muscles";
-import { RANGOS, requisitoSiguiente, type Nivel, type Rango, type Rangos } from "@/lib/domain/rangos";
+import { RANGOS, ZONA_NOMBRE, type Nivel, type Rango, type Rangos, type Zona } from "@/lib/domain/rangos";
 import type { MuscleGroup } from "@/lib/domain/types";
 import { cn } from "@/lib/utils";
 
@@ -32,19 +32,20 @@ export function InsigniaRango({ nivel, grande = false, className }: { nivel: Niv
       )}
       style={{ borderColor: color, color, background: `color-mix(in oklab, ${color} 14%, transparent)` }}
     >
-      <Crown className={grande ? "size-4" : "size-3"} aria-hidden /> {nivel.rango}
+      <Crown className={grande ? "size-4" : "size-3"} aria-hidden /> {nivel.nombre}
     </span>
   );
 }
 
 export function BarraRango({ nivel }: { nivel: Nivel }) {
   const siguiente = RANGOS[nivel.indice + 1];
+  const pct = Math.round(nivel.progreso * 100);
   return (
     <div className="space-y-1">
       <div className="h-1.5 overflow-hidden rounded-full bg-secondary" role="meter" aria-valuenow={Math.round(nivel.progreso * 100)} aria-valuemin={0} aria-valuemax={100} aria-label={siguiente ? `Progreso hacia ${siguiente}` : "Rango máximo"}>
         <div className="h-full rounded-full" style={{ width: `${nivel.progreso * 100}%`, background: COLOR_RANGO[nivel.rango] }} />
       </div>
-      <p className="text-[11px] text-muted-foreground">{siguiente ? `${Math.round(nivel.progreso * 100)} % hacia ${siguiente}` : "Rango máximo"}</p>
+      <p className="text-[11px] text-muted-foreground">{siguiente ? `${pct} % hacia ${siguiente}` : "Rango máximo"}</p>
     </div>
   );
 }
@@ -141,10 +142,23 @@ export function PanelRangos({ rangos }: { rangos: Rangos }) {
           ))}
         </ul>
         <p className="text-xs text-muted-foreground">
-          Todo el mundo empieza en Hierro y subes solo mejorando respecto a la primera vez: en el gimnasio, más peso o más
-          repeticiones (1RM estimado); en el core, más repeticiones o segundos completados y variantes más difíciles. Ir sin
-          mejorar no sube de rango.
+          Como en Symmetry, pero comparándote contigo: empiezas en Hierro I y subes mejorando respecto a tu primera vez. En el
+          gimnasio cuenta el peso y las reps (1RM estimado) en relación a tu peso corporal; en el core, las reps o segundos
+          completados y las variantes más difíciles. Cuenta lo que mantienes (tus 2 mejores sesiones recientes), no un día
+          suelto, y un mal día no te baja más de un 15 %.
         </p>
+      </Glass>
+      <Glass className="space-y-2">
+        <SectionTitle>Por zona</SectionTitle>
+        <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          {(Object.entries(rangos.zonas) as [Zona, Nivel][]).map(([z, n]) => (
+            <li key={z} className="space-y-1.5 rounded-2xl border border-border bg-secondary/30 p-2.5">
+              <p className="text-sm font-medium">{ZONA_NOMBRE[z]}</p>
+              <InsigniaRango nivel={n} />
+              <BarraRango nivel={n} />
+            </li>
+          ))}
+        </ul>
       </Glass>
       <Glass className="space-y-2">
         <SectionTitle>Por músculo</SectionTitle>
@@ -168,11 +182,11 @@ export function PanelRangos({ rangos }: { rangos: Rangos }) {
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm">{ejercicio(r.exerciseId).nombre}</span>
                 <span className="block text-[11px] tabular-nums text-muted-foreground">
-                  {ejercicio(r.exerciseId).modulo === "abdominales" ? "Core" : `1RM estimado ${Math.round(r.fuerza)} kg`} · {r.mejora >= 1 ? "+" : ""}
+                  {r.modulo === "abdominales" ? "Core" : `1RM mantenido ${Math.round(r.fuerza)} kg`} · {r.mejora >= 1 ? "+" : ""}
                   {Math.round((r.mejora - 1) * 100)} % · {r.sesiones} {r.sesiones === 1 ? "sesión" : "sesiones"}
                 </span>
-                {requisitoSiguiente(r, r.mejora, ejercicio(r.exerciseId).modulo === "abdominales") && (
-                  <span className="block text-[11px] text-muted-foreground">Para {requisitoSiguiente(r, r.mejora, ejercicio(r.exerciseId).modulo === "abdominales")}</span>
+                {r.objetivo && (
+                  <span className="block text-[11px] text-muted-foreground">Para {r.objetivo}</span>
                 )}
               </span>
               <InsigniaRango nivel={r} />
