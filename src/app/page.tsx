@@ -144,7 +144,7 @@ export default function Gimnasio() {
             Semana {semanas + 1} de entreno{semanas === 0 && ": calibrando tus pesos"}
           </p>
           {(() => {
-            const general = calcularRangos(logsDeWorkouts(workouts)).general;
+            const general = calcularRangos(logsDeWorkouts(workouts), undefined, (abs ?? []).filter((s) => !s._deleted)).general;
             return general ? (
               <Link href="/progreso/?tab=rangos" className="mt-2 inline-flex items-center gap-2 text-xs text-muted-foreground" aria-label={`Rango general: ${general.rango}. Ver rangos`}>
                 <InsigniaRango nivel={general} /> {Math.round(general.progreso * 100)} % hacia el siguiente

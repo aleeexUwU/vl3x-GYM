@@ -39,9 +39,10 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Aviso, Cargando, Chips, Glass, Stat, Stepper } from "@/components/ui-kit";
-import { completarWorkout, hacerLuego, logsDeWorkouts, mutarWorkout, sustituirEnWorkout, tocaCalentar } from "@/lib/app/gimnasio";
-import { marcarDolorEnPlan, sustituirEnPlanGuardado } from "@/lib/app/planificacion";
-import { useAjustes, usePerfil, usePesosMaquina, useWorkout, useWorkouts } from "@/lib/db/hooks";
+import { anadirExtra, completarWorkout, hacerLuego, logsDeWorkouts, mutarWorkout, sustituirEnWorkout, tocaCalentar } from "@/lib/app/gimnasio";
+import { filtroGimnasio, marcarDolorEnPlan, sustituirEnPlanGuardado } from "@/lib/app/planificacion";
+import { useAbsSessions, useAjustes, usePerfil, usePesosMaquina, usePlan, useWorkout, useWorkouts } from "@/lib/db/hooks";
+import { elegirExtra } from "@/lib/domain/extra";
 import type { Workout, WorkoutExercise, WorkoutSet } from "@/lib/db/types";
 import { ejercicio } from "@/lib/domain/exercises";
 import {
@@ -58,7 +59,7 @@ import {
   ultimoRegistro,
   type EstadoProgresion,
 } from "@/lib/domain/progression";
-import { formatoFecha } from "@/lib/domain/dates";
+import { formatoFecha, hoyISO } from "@/lib/domain/dates";
 import type { LoadType } from "@/lib/domain/types";
 import { toque } from "@/lib/haptics";
 import { cn } from "@/lib/utils";
@@ -735,6 +736,20 @@ function SerieEditor({
 }
 
 function Resumen({ workout, previos }: { workout: Workout; previos: ReturnType<typeof logsDeWorkouts> }) {
+  const absRes = (useAbsSessions() ?? []).filter((s) => !s._deleted);
+  const planRes = usePlan();
+  const perfilRes = usePerfil();
+  const ajustesRes = useAjustes();
+  const extra =
+    perfilRes && ajustesRes && planRes?.minimos
+      ? elegirExtra(
+          workout.ejercicios.map((x) => x.exerciseId),
+          planRes.cobertura,
+          planRes.minimos,
+          filtroGimnasio(perfilRes, ajustesRes),
+          ajustesRes.prioridad === "superior",
+        )
+      : null;
   const [notas, setNotas] = useState(workout.notas);
   useEffect(() => {
     if (notas === workout.notas) return;
@@ -768,8 +783,8 @@ function Resumen({ workout, previos }: { workout: Workout; previos: ReturnType<t
         <Stat etiqueta="Tiempo" valor={minutos ?? "—"} detalle="min" color="lime" />
       </div>
       {(() => {
-          const antes = calcularRangos(previos.filter((l) => l.fecha <= workout.fecha));
-          const despues = calcularRangos([...previos.filter((l) => l.fecha <= workout.fecha), ...logsDeWorkouts([workout])]);
+          const antes = calcularRangos(previos.filter((l) => l.fecha <= workout.fecha), undefined, absRes);
+          const despues = calcularRangos([...previos.filter((l) => l.fecha <= workout.fecha), ...logsDeWorkouts([workout])], undefined, absRes);
           const lista = subidas(antes, despues);
           if (!lista.length) return null;
           const nombre = (s: (typeof lista)[number]) =>
@@ -811,6 +826,22 @@ function Resumen({ workout, previos }: { workout: Workout; previos: ReturnType<t
         </label>
         <Textarea id="notas-sesion" value={notas} onChange={(e) => setNotas(e.target.value)} className="mt-2 min-h-24 rounded-2xl" />
       </Glass>
+      {extra && workout.fecha === hoyISO() && !workout.ejercicios.some((x) => x.extra) && (
+        <Glass className="space-y-2">
+          <p className="font-semibold">Extra si no estás muy cansado</p>
+          <p className="text-sm text-muted-foreground">
+            {extra.ejercicio.nombre}: 2 series para {GRUPO_NOMBRE[extra.grupo].toLowerCase()}, el músculo con menos volumen esta
+            semana. Solo si te quedan fuerzas: saltártelo no pasa nada.
+          </p>
+          <Button
+            variant="secondary"
+            className="h-12 w-full rounded-xl"
+            onClick={() => void anadirExtra(workout.id, extra.ejercicio.id, perfilRes!, ajustesRes!)}
+          >
+            <Plus /> Añadir el extra
+          </Button>
+        </Glass>
+      )}
       <Button asChild className="h-14 w-full rounded-2xl text-base">
         <Link href="/">Volver</Link>
       </Button>

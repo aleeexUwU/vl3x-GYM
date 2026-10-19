@@ -1,4 +1,4 @@
-import { EJERCICIOS_GIMNASIO } from "./exercises";
+import { EJERCICIOS_ABDOMINALES, EJERCICIOS_GIMNASIO, getEjercicio } from "./exercises";
 import { GRUPOS_GIMNASIO } from "./muscles";
 import { fuerzaEstimada, type ExerciseLog } from "./progression";
 import type { MuscleGroup } from "./types";
@@ -77,8 +77,54 @@ export interface Rangos {
   general: Nivel | null;
 }
 
-/** Rangos con todo el historial (o hasta una fecha, para comparar antes/después). */
-export function calcularRangos(logs: ExerciseLog[], hasta?: string): Rangos {
+/** Lo mínimo de una sesión de core para puntuarla. */
+export interface SesionCore {
+  fecha: string;
+  items: { exerciseId: string; series: number; objetivo: number; hechas: number }[];
+}
+
+/** Ejercicio con el que empieza cada progresión de core (crunch → crunch brazos arriba → ...). */
+function raizCore(id: string): { raiz: string; paso: number } {
+  let raiz = id;
+  let paso = 0;
+  for (let i = 0; i < 10; i++) {
+    const previo = EJERCICIOS_ABDOMINALES.find((e) => e.siguiente === raiz);
+    if (!previo) break;
+    raiz = previo.id;
+    paso++;
+  }
+  return { raiz, paso };
+}
+
+/**
+ * Core: cada progresión cuenta como un ejercicio. La "fuerza" es el trabajo de una serie
+ * (reps o segundos) y cada variante más difícil vale un 50 % más; solo cuenta lo hecho.
+ */
+function rangosCore(sesiones: SesionCore[], hasta?: string): RangoEjercicio[] {
+  const porRaiz = new Map<string, { fecha: string; puntos: number; actual: string }[]>();
+  for (const s of sesiones) {
+    if (hasta && s.fecha > hasta) continue;
+    for (const it of s.items) {
+      if (!it.hechas || !getEjercicio(it.exerciseId)) continue;
+      const { raiz, paso } = raizCore(it.exerciseId);
+      const puntos = it.objetivo * 1.5 ** paso * Math.min(1, it.hechas / Math.max(1, it.series));
+      porRaiz.set(raiz, [...(porRaiz.get(raiz) ?? []), { fecha: s.fecha, puntos, actual: it.exerciseId }]);
+    }
+  }
+  const out: RangoEjercicio[] = [];
+  for (const regs of porRaiz.values()) {
+    const orden = [...regs].sort((a, b) => a.fecha.localeCompare(b.fecha));
+    const primera = orden[0].puntos;
+    const fuerza = Math.max(...orden.map((r) => r.puntos));
+    const mejora = primera > 0 ? fuerza / primera : 1;
+    const sesionesN = new Set(orden.map((r) => r.fecha)).size;
+    out.push({ exerciseId: orden[orden.length - 1].actual, fuerza, mejora, sesiones: sesionesN, ...nivelEjercicio(mejora, sesionesN) });
+  }
+  return out;
+}
+
+/** Rangos con todo el historial (o hasta una fecha, para comparar antes/después). Core opcional. */
+export function calcularRangos(logs: ExerciseLog[], hasta?: string, core: SesionCore[] = []): Rangos {
   const porEjercicio = new Map<string, ExerciseLog[]>();
   for (const l of logs) {
     if (hasta && l.fecha > hasta) continue;
@@ -101,9 +147,11 @@ export function calcularRangos(logs: ExerciseLog[], hasta?: string): Rangos {
     if (!delGrupo.length) continue;
     musculos[g] = nivelDe(Math.max(...delGrupo.map((r) => r.puntuacion)));
   }
+  const deCore = rangosCore(core, hasta);
+  if (deCore.length) musculos.core = nivelDe(deCore.reduce((s, r) => s + r.puntuacion, 0) / deCore.length);
   const ps = Object.values(musculos).map((n) => n!.puntuacion);
   return {
-    ejercicios: ejercicios.sort((a, b) => b.puntuacion - a.puntuacion),
+    ejercicios: [...ejercicios, ...deCore].sort((a, b) => b.puntuacion - a.puntuacion),
     musculos,
     general: ps.length ? nivelDe(ps.reduce((s, p) => s + p, 0) / ps.length) : null,
   };

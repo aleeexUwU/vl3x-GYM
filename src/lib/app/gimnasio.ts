@@ -210,3 +210,21 @@ export function tocaCalentar(ejercicios: { exerciseId: string }[], idx: number):
   }
   return Object.entries(e.musculos).some(([g, w]) => (w ?? 0) >= 1 && !calientes.has(g));
 }
+
+/**
+ * "Extra si no estás muy cansado": reabre la sesión terminada con un ejercicio más
+ * (2 series, con su peso sugerido). Al acabarlo se vuelve a cerrar como siempre.
+ */
+export async function anadirExtra(workoutId: string, exerciseId: string, perfil: Profile, ajustes: Settings): Promise<void> {
+  const todos = vivos(await db().workouts.toArray());
+  const logs = logsDeWorkouts(todos.filter((w) => w.id !== workoutId));
+  const maquinas = (await leerKv("pesosMaquina")) ?? {};
+  const e = ejercicio(exerciseId);
+  const pe: PlannedExercise = { exerciseId, series: 2, repsMin: e.repsMin, repsMax: e.repsMax, descansoSeg: e.descansoSeg, rir: 1 };
+  const nuevo = prepararEjercicio(pe, perfil, ajustes, logs, hoyISO(), maquinas);
+  await mutarWorkout(workoutId, (w) => {
+    w.ejercicios.push({ ...nuevo, extra: true });
+    w.estado = "en_curso";
+    delete w.fin;
+  });
+}

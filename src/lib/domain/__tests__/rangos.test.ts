@@ -39,3 +39,19 @@ describe("rangos por progreso y constancia", () => {
     expect(calcularRangos(ls, "2026-10-01").ejercicios[0].sesiones).toBe(1);
   });
 });
+
+describe("rangos del core", () => {
+  const sesion = (fecha: string, exerciseId: string, objetivo: number, hechas = 3) => ({ fecha, items: [{ exerciseId, series: 3, objetivo, hechas }] });
+  it("sube con más reps y con variantes más difíciles, y cuenta para el general", () => {
+    const pocas = calcularRangos([], undefined, [sesion("2026-10-01", "crunch", 10)]);
+    expect(pocas.musculos.core?.rango).toBe("Hierro");
+    const fechas = Array.from({ length: 8 }, (_, i) => `2026-10-${String(i + 1).padStart(2, "0")}`);
+    const mejora = calcularRangos([], undefined, fechas.map((f, i) => sesion(f, i < 4 ? "crunch" : "crunch_brazos_arriba", 10 + i)));
+    expect(mejora.musculos.core!.indice).toBeGreaterThanOrEqual(3);
+    expect(mejora.general?.rango).toBe(mejora.musculos.core!.rango);
+  });
+  it("lo no hecho no cuenta", () => {
+    const r = calcularRangos([], undefined, [sesion("2026-10-01", "crunch", 10), sesion("2026-10-02", "crunch", 30, 0)]);
+    expect(r.ejercicios[0].mejora).toBe(1);
+  });
+});

@@ -32,6 +32,8 @@ export interface WorkoutExercise {
   exerciseId: string;
   /** Si se sustituyó durante la sesión, el ejercicio original. */
   sustituyeA?: string;
+  /** Añadido al final con "Extra si no estás muy cansado". */
+  extra?: boolean;
   repsMin: number;
   repsMax: number;
   descansoSeg: number;

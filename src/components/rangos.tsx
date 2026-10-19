@@ -66,6 +66,7 @@ const ZONAS: Partial<Record<MuscleGroup, string[]>> = {
   abductores: ["abductors"],
   gemelos: ["calves"],
   lumbar: ["lower-back"],
+  core: ["abs", "obliques"],
 };
 
 /** Cuerpo coloreado por rango de cada músculo (body-highlighter, MIT). */
@@ -141,7 +142,8 @@ export function PanelRangos({ rangos }: { rangos: Rangos }) {
         </ul>
         <p className="text-xs text-muted-foreground">
           Todo el mundo empieza en Hierro. Subes con constancia y mejora real: cuánto ha crecido tu fuerza (1RM estimado) en
-          cada ejercicio desde la primera vez y cuántas sesiones llevas con él.
+          cada ejercicio desde la primera vez y cuántas sesiones llevas con él. En el core cuentan las reps o segundos que
+          completas y pasar a variantes más difíciles.
         </p>
       </Glass>
       <Glass className="space-y-2">
@@ -166,7 +168,7 @@ export function PanelRangos({ rangos }: { rangos: Rangos }) {
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm">{ejercicio(r.exerciseId).nombre}</span>
                 <span className="block text-[11px] tabular-nums text-muted-foreground">
-                  1RM estimado {Math.round(r.fuerza)} kg · {r.mejora >= 1 ? "+" : ""}
+                  {ejercicio(r.exerciseId).modulo === "abdominales" ? "Core" : `1RM estimado ${Math.round(r.fuerza)} kg`} · {r.mejora >= 1 ? "+" : ""}
                   {Math.round((r.mejora - 1) * 100)} % · {r.sesiones} {r.sesiones === 1 ? "sesión" : "sesiones"}
                 </span>
                 {requisitoSiguiente(r, r.mejora, r.sesiones) && (

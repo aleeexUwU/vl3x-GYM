@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowLeft, Check, Flame, Pause, Play, SkipForward } from "lucide-react";
+import { ArrowLeft, Check, Flame, Pause, Play, Plus, SkipForward } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { ExerciseImage } from "@/components/exercise/exercise-image";
@@ -55,7 +55,15 @@ export default function SesionAbdominales() {
     () => (perfil && ajustes && ev !== undefined ? rutinaAbdominales(hoy, ajustes.inicioAbdominales, filtroCasa(perfil, ajustes, ev)) : null),
     [perfil, ajustes, ev, hoy],
   );
-  const pasos = useMemo(() => (rutina ? construirPasos(rutina.items) : []), [rutina]);
+  // "Extra si no estás muy cansado": una ronda más (1 serie de cada ejercicio) al final.
+  const [extra, setExtra] = useState(false);
+  const pasos = useMemo(() => {
+    if (!rutina) return [];
+    const base = construirPasos(rutina.items);
+    if (!extra) return base;
+    const ronda = construirPasos(rutina.items.map((it) => ({ ...it, series: 1 })));
+    return [...base, { tipo: "descanso" as const, seg: 45, siguiente: ejercicio(rutina.items[0].exerciseId).nombre }, ...ronda];
+  }, [rutina, extra]);
   const [i, setI] = useState(0);
   const [fin, setFin] = useState<number | null>(null);
   const [pausaRestante, setPausaRestante] = useState<number | null>(null);
@@ -86,7 +94,7 @@ export default function SesionAbdominales() {
       }
       const s = sesion.current;
       if (itemHecho !== undefined) s.items[itemHecho].hechas += 1;
-      s.completado = completado;
+      s.completado = completado || s.completado; // la ronda extra no "deshace" el core ya hecho
       s.duracionSeg = Math.round((Date.now() - inicio) / 1000);
       sesion.current = await guardar<AbsSession>("absSessions", s);
     },
@@ -140,6 +148,27 @@ export default function SesionAbdominales() {
         </motion.div>
         <h1 className="glitch font-display text-4xl text-primary" data-text="¡Core hecho!">¡Core hecho!</h1>
         <p className="text-muted-foreground">Racha: {racha(fechas, hoy)} {racha(fechas, hoy) === 1 ? "día" : "días"}</p>
+        {!extra && (
+          <Glass className="space-y-2 text-left">
+            <p className="font-semibold">Extra si no estás muy cansado</p>
+            <p className="text-sm text-muted-foreground">
+              Una ronda más: 1 serie de cada ejercicio (~{Math.max(2, Math.round(rutina.items.reduce((t, it) => t + (it.medida === "segundos" ? it.objetivo : it.objetivo * 2.5) + 20, 0) / 60))} min). Si vas justo, déjalo para mañana.
+            </p>
+            <Button
+              variant="secondary"
+              className="h-12 w-full rounded-xl"
+              onClick={() => {
+                const desde = pasos.length;
+                setExtra(true);
+                setTerminado(false);
+                setI(desde);
+                setFin(Date.now() + 45 * 1000);
+              }}
+            >
+              <Plus /> Hacer la ronda extra
+            </Button>
+          </Glass>
+        )}
         <Button asChild className="h-14 w-full rounded-2xl text-base">
           <Link href="/abdominales/">Volver</Link>
         </Button>
