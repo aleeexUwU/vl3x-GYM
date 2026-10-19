@@ -65,6 +65,8 @@ export interface AbsSessionItem {
   objetivo: number;
   medida: Measure;
   hechas: number;
+  /** Reps o segundos reales de cada serie hecha (para adaptar la siguiente sesión). */
+  reales?: number[];
 }
 
 export interface AbsSession extends SyncMeta {
@@ -72,6 +74,8 @@ export interface AbsSession extends SyncMeta {
   completado: boolean;
   items: AbsSessionItem[];
   duracionSeg: number;
+  /** Crunches al fallo al terminar (para medir el progreso y añadir fatiga). */
+  fallo?: { exerciseId: string; reps: number };
 }
 
 export interface ArmExercise extends SyncMeta {

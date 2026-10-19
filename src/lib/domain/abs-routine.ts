@@ -25,6 +25,23 @@ export interface AbsItem {
   nivel: number;
 }
 
+/** Lo que se hizo de un ejercicio en una sesión de core (para adaptar la siguiente). */
+export interface RegistroCore {
+  fecha: string;
+  exerciseId: string;
+  series: number;
+  objetivo: number;
+  hechas: number;
+  /** Reps o segundos reales de cada serie (si se anotaron). */
+  reales?: number[];
+}
+
+/** Sesiones anteriores, tal como se guardan (solo lo necesario). */
+export interface SesionCoreHistorial {
+  fecha: string;
+  items: Omit<RegistroCore, "fecha">[];
+}
+
 export interface AbsRoutine {
   fecha: string;
   semana: number;
@@ -68,6 +85,66 @@ function tiempoSerieSeg(item: Pick<AbsItem, "medida" | "objetivo">): number {
   return item.medida === "segundos" ? item.objetivo : item.objetivo * 2.5;
 }
 
+/** Variantes de una progresión desde un ejercicio base (crunch → brazos arriba → encogido). */
+function cadena(base: Exercise): Exercise[] {
+  const out = [base];
+  while (out.length < 10 && out[out.length - 1].siguiente) out.push(ejercicio(out[out.length - 1].siguiente!));
+  return out;
+}
+
+/** Cómo salió un registro: completo (todas las series al objetivo) y % de lo pedido. */
+function resultado(r: RegistroCore): { completo: boolean; ratio: number; minimo: number } {
+  const reales = r.reales?.length
+    ? r.reales.slice(0, r.series)
+    : Array.from({ length: r.series }, (_, i) => (i < r.hechas ? r.objetivo : 0));
+  while (reales.length < r.series) reales.push(0);
+  const hecho = reales.reduce((t, v) => t + Math.min(v, r.objetivo), 0);
+  return { completo: reales.every((v) => v >= r.objetivo), ratio: hecho / (r.objetivo * r.series), minimo: Math.min(...reales) };
+}
+
+/**
+ * Progresión según lo que HICISTE (como en el gimnasio), no según el calendario:
+ *  - todas las series al objetivo → sube (+2 reps / +5 s; si te sobró mucho, salta a lo que hiciste);
+ *  - te faltó poco (≥ 80 %) → repite;
+ *  - fallo claro dos veces seguidas → baja un paso (y, si ya estabas abajo, vuelve a la variante anterior);
+ *  - en el tope, 2 sesiones seguidas completas → pasa a la variante más difícil.
+ */
+export function progresionAdaptativa(
+  base: Exercise,
+  registros: RegistroCore[],
+  permitido: (e: Exercise) => boolean = () => true,
+): { ejercicio: Exercise; objetivo: number; nivel: number } | null {
+  const vars = cadena(base);
+  const propios = registros
+    .filter((r) => vars.some((v) => v.id === r.exerciseId) && r.hechas > 0)
+    .sort((a, b) => a.fecha.localeCompare(b.fecha));
+  const ultimo = propios.at(-1);
+  if (!ultimo) return null;
+  const nivel = vars.findIndex((v) => v.id === ultimo.exerciseId);
+  const e = vars[nivel];
+  const inc = e.incrementoSemanal ?? (e.medida === "segundos" ? 5 : 2);
+  const res = resultado(ultimo);
+  const anterior = propios.at(-2);
+  const resAnt = anterior && anterior.exerciseId === e.id ? resultado(anterior) : null;
+
+  if (res.completo) {
+    if (ultimo.objetivo >= e.repsMax) {
+      const sig = vars[nivel + 1];
+      const dosEnTope = resAnt?.completo && anterior!.objetivo >= e.repsMax;
+      if (sig && permitido(sig) && dosEnTope) return { ejercicio: sig, objetivo: sig.repsMin, nivel: nivel + 1 };
+      return { ejercicio: e, objetivo: e.repsMax, nivel };
+    }
+    return { ejercicio: e, objetivo: Math.min(e.repsMax, Math.max(ultimo.objetivo + inc, res.minimo)), nivel };
+  }
+  if (res.ratio >= 0.8 || !resAnt || resAnt.ratio >= 0.8) return { ejercicio: e, objetivo: ultimo.objetivo, nivel };
+  // Fallo claro dos veces: un paso atrás.
+  const bajado = ultimo.objetivo - inc;
+  if (bajado >= e.repsMin) return { ejercicio: e, objetivo: bajado, nivel };
+  const prev = vars[nivel - 1];
+  if (prev) return { ejercicio: prev, objetivo: prev.repsMax, nivel: nivel - 1 };
+  return { ejercicio: e, objetivo: e.repsMin, nivel };
+}
+
 /**
  * Líneas fijas de cada día: los abdominales clásicos van SIEMPRE y por delante.
  * Cada línea tiene sus raíces en orden de preferencia: se usa la primera permitida.
@@ -98,15 +175,24 @@ export const SERIES_CORE = 3;
  * piernas tumbado, siempre; más un complemento rotativo si cabe en 15 min.
  * Cada semana suben reps/segundos y, al tope, se pasa a la variante más difícil.
  */
-export function rutinaAbdominales(fecha: string, inicio: string, filtro: FiltroEjercicios): AbsRoutine {
+export function rutinaAbdominales(
+  fecha: string,
+  inicio: string,
+  filtro: FiltroEjercicios,
+  historial: SesionCoreHistorial[] = [],
+): AbsRoutine {
   const d = Math.max(0, diasEntre(inicio, fecha));
   const semana = Math.floor(d / 7);
   const permitido = (e: Exercise) => ejercicioPermitido(e, filtro);
+  const registros: RegistroCore[] = historial
+    .filter((s) => s.fecha < fecha)
+    .flatMap((s) => s.items.map((it) => ({ ...it, fecha: s.fecha })));
 
   const items: AbsItem[] = [];
   const usados = new Set<string>();
   const anadir = (base: Exercise, categoria: CoreCategory) => {
-    const { ejercicio: ej, objetivo, nivel } = resolverProgresion(base, semana, permitido);
+    // Con historial, según lo que hiciste; sin él (primera vez), por semanas.
+    const { ejercicio: ej, objetivo, nivel } = progresionAdaptativa(base, registros, permitido) ?? resolverProgresion(base, semana, permitido);
     if (usados.has(ej.id)) return;
     usados.add(ej.id);
     items.push({ exerciseId: ej.id, categoria, series: SERIES_CORE, objetivo, medida: ej.medida, descansoSeg: ej.descansoSeg, nivel });

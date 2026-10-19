@@ -3,6 +3,7 @@
 import { CheckCircle2, Clock, Flame, Play, RotateCcw } from "lucide-react";
 import Link from "next/link";
 import { Calendario } from "@/components/calendar";
+import { GraficaLineas } from "@/components/charts-diferidos";
 import { ExerciseImage } from "@/components/exercise/exercise-image";
 import { ReminderCard } from "@/components/reminder-card";
 import { Button } from "@/components/ui/button";
@@ -24,11 +25,15 @@ export default function Abdominales() {
   if (!perfil || !ajustes || !sesiones || ev === undefined) return <Cargando />;
 
   const hoy = hoyISO();
-  const rutina = rutinaAbdominales(hoy, ajustes.inicioAbdominales, filtroCasa(perfil, ajustes, ev));
+  const rutina = rutinaAbdominales(hoy, ajustes.inicioAbdominales, filtroCasa(perfil, ajustes, ev), sesiones.filter((s) => !s._deleted));
   const claves = clavesHechas([], sesiones, []);
   const fechas = fechasDe(claves, "abdominales");
   const hechoHoy = claves.has(`${hoy}|abdominales`);
   const actual = racha(fechas, hoy);
+  // Mejor marca al fallo de cada día.
+  const porDia = new Map<string, number>();
+  for (const s of sesiones) if (!s._deleted && s.fallo) porDia.set(s.fecha, Math.max(porDia.get(s.fecha) ?? 0, s.fallo.reps));
+  const fallos = [...porDia].sort((a, b) => a[0].localeCompare(b[0])).map(([fecha, reps]) => ({ fecha, reps }));
 
   return (
     <div className="space-y-5">
@@ -82,10 +87,23 @@ export default function Abdominales() {
           <Link href="/abdominales/sesion/">{hechoHoy ? <><RotateCcw /> Repetir</> : <><Play /> Empezar</>}</Link>
         </Button>
         <p className="mt-3 text-xs text-muted-foreground">
-          Cada semana suben las repeticiones o los segundos; al llegar al tope pasas a una variante más difícil.
+          Se adapta a lo que haces: si completas todas las series sube, si te falta poco repite y si fallas dos días
+          baja. Dos días completos en el tope y pasas a una variante más difícil. Al final, crunches al fallo.
           {tieneManoLimitada(perfil.limitaciones) && " Sin apoyar peso en la mano izquierda."}
         </p>
       </Glass>
+
+      {fallos.length > 0 && (
+        <Glass>
+          <SectionTitle>Crunches al fallo</SectionTitle>
+          <p className="mb-2 text-sm text-muted-foreground">
+            Última: <strong className="text-foreground tabular-nums">{fallos.at(-1)!.reps}</strong> · récord{" "}
+            <strong className="text-foreground tabular-nums">{Math.max(...fallos.map((f) => f.reps))}</strong>
+            {fallos.length > 1 && ` · primera ${fallos[0].reps}`}
+          </p>
+          {fallos.length > 1 && <GraficaLineas datos={fallos} x="fecha" series={[{ clave: "reps", nombre: "Crunches", color: "1" }]} unidad="reps" alto={180} ajustarEje />}
+        </Glass>
+      )}
 
       <Glass>
         <SectionTitle>Calendario</SectionTitle>

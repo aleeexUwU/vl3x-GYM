@@ -51,9 +51,15 @@ export default function SesionAbdominales() {
   const ev = useEvaluacionBrazo();
   const sesiones = useAbsSessions();
   const hoy = hoyISO();
+  const cargadas = sesiones !== undefined;
   const rutina = useMemo(
-    () => (perfil && ajustes && ev !== undefined ? rutinaAbdominales(hoy, ajustes.inicioAbdominales, filtroCasa(perfil, ajustes, ev)) : null),
-    [perfil, ajustes, ev, hoy],
+    // El historial solo cuenta días anteriores: la rutina no cambia mientras guardas la de hoy.
+    () =>
+      perfil && ajustes && ev !== undefined && sesiones
+        ? rutinaAbdominales(hoy, ajustes.inicioAbdominales, filtroCasa(perfil, ajustes, ev), sesiones.filter((x) => !x._deleted && x.fecha < hoy))
+        : null,
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- solo al cargar: no recalcular al guardar la sesión de hoy
+    [perfil, ajustes, ev, hoy, cargadas],
   );
   // "Extra si no estás muy cansado": una ronda más (1 serie de cada ejercicio) al final.
   const [extra, setExtra] = useState(false);
@@ -69,6 +75,9 @@ export default function SesionAbdominales() {
   const [pausaRestante, setPausaRestante] = useState<number | null>(null);
   const [conteo, setConteo] = useState(0);
   const [terminado, setTerminado] = useState(false);
+  // Crunches al fallo al acabar: "pendiente" → "activo" → "hecho" (o saltado).
+  const [fallo, setFallo] = useState<"pendiente" | "activo" | "hecho">("pendiente");
+  const [falloReps, setFalloReps] = useState(0);
   const [tecnica, setTecnica] = useState<string | null>(null);
   const [flash, setFlash] = useState(0);
   const sesion = useRef<AbsSession | null>(null);
@@ -79,21 +88,25 @@ export default function SesionAbdominales() {
 
 
   const guardarProgreso = useCallback(
-    async (completado: boolean, itemHecho?: number) => {
+    async (completado: boolean, itemHecho?: number, valor?: number, falloHecho?: AbsSession["fallo"]) => {
       if (!rutina) return;
       if (!sesion.current) {
         sesion.current = {
           id: nuevoId(),
           fecha: hoy,
           completado: false,
-          items: rutina.items.map((it) => ({ exerciseId: it.exerciseId, series: it.series, objetivo: it.objetivo, medida: it.medida, hechas: 0 })),
+          items: rutina.items.map((it) => ({ exerciseId: it.exerciseId, series: it.series, objetivo: it.objetivo, medida: it.medida, hechas: 0, reales: [] })),
           duracionSeg: 0,
           updatedAt: 0,
           _dirty: 1,
         };
       }
       const s = sesion.current;
-      if (itemHecho !== undefined) s.items[itemHecho].hechas += 1;
+      if (itemHecho !== undefined) {
+        s.items[itemHecho].hechas += 1;
+        s.items[itemHecho].reales = [...(s.items[itemHecho].reales ?? []), valor ?? s.items[itemHecho].objetivo];
+      }
+      if (falloHecho) s.fallo = falloHecho;
       s.completado = completado || s.completado; // la ronda extra no "deshace" el core ya hecho
       s.duracionSeg = Math.round((Date.now() - inicio) / 1000);
       sesion.current = await guardar<AbsSession>("absSessions", s);
@@ -107,6 +120,11 @@ export default function SesionAbdominales() {
     const siguiente = i + 1;
     if (siguiente >= pasos.length) {
       setFin(null);
+      if (fallo === "pendiente") {
+        setFallo("activo");
+        void guardarProgreso(true);
+        return;
+      }
       setTerminado(true);
       void guardarProgreso(true);
       if (ajustes) void sincronizarRecordatorioConSW({ ...ajustes.recordatorio, hechoHoy: hoy });
@@ -116,11 +134,12 @@ export default function SesionAbdominales() {
     const p = pasos[siguiente];
     if (p.tipo === "descanso") setFin(Date.now() + p.seg * 1000);
     else setFin(null);
-  }, [i, pasos, guardarProgreso, ajustes, hoy]);
+  }, [i, pasos, guardarProgreso, ajustes, hoy, fallo]);
 
-  const completarTrabajo = useCallback(() => {
+  /** `valor`: reps contadas o segundos aguantados (por defecto, el objetivo). */
+  const completarTrabajo = useCallback((valor?: number) => {
     if (paso?.tipo !== "trabajo") return;
-    void guardarProgreso(false, paso.item);
+    void guardarProgreso(false, paso.item, valor);
     setFlash((f) => f + 1);
     avanzar();
   }, [paso, guardarProgreso, avanzar]);
@@ -139,6 +158,56 @@ export default function SesionAbdominales() {
 
   if (!rutina || !ajustes || !sesiones) return <Cargando />;
 
+  const ejFallo = rutina.items.find((it) => it.exerciseId.startsWith("crunch") && it.categoria === "recto")?.exerciseId ?? "crunch";
+  const fallosPrevios = sesiones.filter((x) => !x._deleted && x.fallo && x.fecha < hoy).map((x) => x.fallo!.reps);
+  const recordFallo = fallosPrevios.length ? Math.max(...fallosPrevios) : null;
+
+  if (fallo === "activo") {
+    const terminarFallo = (reps: number | null) => {
+      setFallo("hecho");
+      setTerminado(true);
+      if (reps) void guardarProgreso(true, undefined, undefined, { exerciseId: ejFallo, reps });
+      if (ajustes) void sincronizarRecordatorioConSW({ ...ajustes.recordatorio, hechoHoy: hoy });
+    };
+    return (
+      <div className="flex min-h-[calc(100dvh-3rem)] flex-col gap-4 pt-4 text-center">
+        <p className="text-sm text-primary">Para terminar</p>
+        <h1 className="font-heading text-3xl tracking-wide">{ejercicio(ejFallo).nombre} al fallo</h1>
+        <p className="mx-auto max-w-[34ch] text-sm text-muted-foreground">
+          Todas las que puedas con buena técnica, sin parar. Mide tu progreso día a día y remata el abdomen.
+          {recordFallo != null && ` Tu récord: ${recordFallo}.`}
+        </p>
+        <button
+          type="button"
+          onClick={() => setFalloReps((c) => c + 1)}
+          className="mx-auto grid size-56 place-items-center rounded-full bg-primary/10 neon-border active:scale-95"
+          aria-label="Contar un crunch"
+        >
+          <span>
+            <span className="block font-display text-7xl tabular-nums neon-text">{falloReps}</span>
+            <span className="text-sm text-muted-foreground">toca por cada crunch</span>
+          </span>
+        </button>
+        <div className="flex items-center justify-center gap-2">
+          <Button variant="secondary" size="icon-lg" className="rounded-2xl" aria-label="Quitar uno" onClick={() => setFalloReps((c) => Math.max(0, c - 1))}>
+            −1
+          </Button>
+          <Button variant="secondary" size="icon-lg" className="rounded-2xl" aria-label="Sumar cinco" onClick={() => setFalloReps((c) => c + 5)}>
+            +5
+          </Button>
+        </div>
+        <div className="safe-bottom mt-auto grid grid-cols-[auto_1fr] gap-2">
+          <Button variant="ghost" className="h-16 rounded-2xl" onClick={() => terminarFallo(null)}>
+            Saltar
+          </Button>
+          <Button className="h-16 rounded-2xl text-lg font-bold" disabled={falloReps === 0} onClick={() => terminarFallo(falloReps)}>
+            <Check /> Terminar
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   if (terminado) {
     const fechas = [...fechasDe(clavesHechas([], sesiones, []), "abdominales"), hoy];
     return (
@@ -148,6 +217,12 @@ export default function SesionAbdominales() {
         </motion.div>
         <h1 className="glitch font-display text-4xl text-primary" data-text="¡Core hecho!">¡Core hecho!</h1>
         <p className="text-muted-foreground">Racha: {racha(fechas, hoy)} {racha(fechas, hoy) === 1 ? "día" : "días"}</p>
+        {falloReps > 0 && fallo === "hecho" && (
+          <p className="text-sm">
+            Al fallo: <strong className="tabular-nums">{falloReps}</strong>
+            {recordFallo == null ? " (primera marca)" : falloReps > recordFallo ? ` · ¡nuevo récord! (antes ${recordFallo})` : ` · récord ${recordFallo}`}
+          </p>
+        )}
         {!extra && (
           <Glass className="space-y-2 text-left">
             <p className="font-semibold">Extra si no estás muy cansado</p>
@@ -275,7 +350,14 @@ export default function SesionAbdominales() {
             <Play /> Empezar
           </Button>
         ) : paso.tipo === "trabajo" ? (
-          <Button className="h-16 rounded-2xl text-lg font-bold" onClick={completarTrabajo}>
+          <Button
+            className="h-16 rounded-2xl text-lg font-bold"
+            onClick={() =>
+              completarTrabajo(
+                item?.medida === "segundos" ? (fin ? Math.max(0, item.objetivo - restante) : item.objetivo) : conteo > 0 ? conteo : item?.objetivo,
+              )
+            }
+          >
             <Check /> Hecho
           </Button>
         ) : (

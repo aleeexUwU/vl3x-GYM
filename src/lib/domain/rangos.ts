@@ -131,7 +131,7 @@ export interface Rangos {
 /** Lo mínimo de una sesión de core para puntuarla. */
 export interface SesionCore {
   fecha: string;
-  items: { exerciseId: string; series: number; objetivo: number; hechas: number }[];
+  items: { exerciseId: string; series: number; objetivo: number; hechas: number; reales?: number[] }[];
 }
 
 export interface OpcionesRangos {
@@ -252,7 +252,11 @@ function rangosCore(sesiones: SesionCore[], hasta?: string): RangoEjercicio[] {
     for (const it of s.items) {
       if (!it.hechas || !getEjercicio(it.exerciseId)) continue;
       const { raiz, paso } = raizCore(it.exerciseId);
-      const valor = it.objetivo * 1.5 ** paso * Math.min(1, it.hechas / Math.max(1, it.series));
+      // Lo que hiciste de verdad (media de las series anotadas); si no hay, el objetivo cumplido.
+      const hecho = it.reales?.length
+        ? it.reales.reduce((t, v) => t + v, 0) / Math.max(it.series, it.reales.length)
+        : it.objetivo * Math.min(1, it.hechas / Math.max(1, it.series));
+      const valor = hecho * 1.5 ** paso;
       porRaiz.set(raiz, [...(porRaiz.get(raiz) ?? []), { fecha: s.fecha, valor, series: it.hechas, actual: it.exerciseId, paso }]);
     }
   }

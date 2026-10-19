@@ -85,7 +85,7 @@ export function ResumenHoy() {
 
   const absHechas = abs.filter((a) => a.completado).map((a) => a.fecha);
   const coreHecho = absHechas.includes(hoy);
-  const rutina = rutinaAbdominales(hoy, ajustes.inicioAbdominales, filtroCasa(perfil, ajustes, ev));
+  const rutina = rutinaAbdominales(hoy, ajustes.inicioAbdominales, filtroCasa(perfil, ajustes, ev), abs.filter((a) => !a._deleted));
   const rachaCore = racha(absHechas, hoy);
 
   const obj = objetivosDiarios(perfil, ajustes.dieta);

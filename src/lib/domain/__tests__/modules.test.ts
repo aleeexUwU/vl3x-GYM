@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolverProgresion, rutinaAbdominales } from "../abs-routine";
+import { progresionAdaptativa, resolverProgresion, rutinaAbdominales } from "../abs-routine";
 import { sumarDias } from "../dates";
 import { ajustesPorDefecto, perfilPorDefecto } from "../defaults";
 import { EJERCICIOS_ABDOMINALES, ejercicio } from "../exercises";
@@ -132,5 +132,32 @@ describe("calentamiento en la sesión", () => {
     expect(tocaCalentar(ejs, 0)).toBe(true);
     expect(tocaCalentar(ejs, 1)).toBe(false); // el pecho ya se ha trabajado
     expect(tocaCalentar(ejs, 2)).toBe(true); // dorsal nuevo
+  });
+});
+
+describe("core adaptativo (según lo que haces)", () => {
+  const crunch = ejercicio("crunch");
+  const reg = (fecha: string, exerciseId: string, objetivo: number, reales: number[]) => ({ fecha, exerciseId, series: 3, objetivo, hechas: reales.length, reales });
+  it("completo sube; te falta poco repite; fallo dos veces baja", () => {
+    expect(progresionAdaptativa(crunch, [reg("2026-10-01", "crunch", 15, [15, 15, 15])])!.objetivo).toBe(17);
+    expect(progresionAdaptativa(crunch, [reg("2026-10-01", "crunch", 15, [20, 21, 20])])!.objetivo).toBe(20);
+    expect(progresionAdaptativa(crunch, [reg("2026-10-01", "crunch", 20, [20, 18, 16])])!.objetivo).toBe(20);
+    const mal = [reg("2026-10-01", "crunch", 20, [12, 10, 8]), reg("2026-10-02", "crunch", 20, [11, 9, 8])];
+    expect(progresionAdaptativa(crunch, mal)!.objetivo).toBe(18);
+    expect(progresionAdaptativa(crunch, mal.slice(0, 1))!.objetivo).toBe(20);
+  });
+  it("en el tope: dos sesiones completas para pasar a la variante difícil", () => {
+    const tope = crunch.repsMax;
+    const una = [reg("2026-10-01", "crunch", tope, [tope, tope, tope])];
+    expect(progresionAdaptativa(crunch, una)!.ejercicio.id).toBe("crunch");
+    const dos = [...una, reg("2026-10-02", "crunch", tope, [tope, tope, tope])];
+    const sig = progresionAdaptativa(crunch, dos)!;
+    expect(sig.ejercicio.id).toBe("crunch_brazos_arriba");
+    expect(sig.nivel).toBe(1);
+  });
+  it("la rutina usa el historial y sin él va por semanas", () => {
+    const hist = [{ fecha: "2026-10-12", items: [{ exerciseId: "crunch", series: 3, objetivo: 15, hechas: 3, reales: [22, 22, 22] }] }];
+    const r = rutinaAbdominales("2026-10-13", "2026-10-12", { equipo: ["esterilla"], limitaciones: [], excluidos: [] }, hist);
+    expect(r.items.find((it) => it.exerciseId === "crunch")!.objetivo).toBe(22);
   });
 });
