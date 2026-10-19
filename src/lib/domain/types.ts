@@ -162,6 +162,8 @@ export interface Settings {
   rangoReps?: RangoReps;
   /** Dropset al final de la última serie (máquinas, poleas y mancuernas). */
   dropset?: boolean;
+  /** Ejercicios que cambiaste (quitado → elegido): se mantienen en las semanas siguientes. */
+  sustituciones?: Record<string, string>;
   /** Aviso push opcional si a media tarde vas muy corto de proteína (máx. 1 al día). */
   avisoProteina?: boolean;
   /** Máquinas y poleas antes que mancuernas (para quien aún no domina la técnica). */

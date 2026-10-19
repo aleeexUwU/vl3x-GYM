@@ -40,7 +40,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Aviso, Cargando, Chips, Glass, Stat, Stepper } from "@/components/ui-kit";
 import { completarWorkout, hacerLuego, logsDeWorkouts, mutarWorkout, sustituirEnWorkout, tocaCalentar } from "@/lib/app/gimnasio";
-import { marcarDolorEnPlan } from "@/lib/app/planificacion";
+import { marcarDolorEnPlan, sustituirEnPlanGuardado } from "@/lib/app/planificacion";
 import { useAjustes, usePerfil, usePesosMaquina, useWorkout, useWorkouts } from "@/lib/db/hooks";
 import type { Workout, WorkoutExercise, WorkoutSet } from "@/lib/db/types";
 import { ejercicio } from "@/lib/domain/exercises";
@@ -653,8 +653,10 @@ function Sesion() {
         onClose={() => setSustituir(false)}
         onElegir={async (nuevo) => {
           setSustituir(false);
+          const de = e.id;
           await sustituirEnWorkout(workout.id, idx, nuevo, perfil, ajustes);
-          toast.success(`Cambiado por ${ejercicio(nuevo).nombre} (solo hoy)`);
+          await sustituirEnPlanGuardado(de, nuevo);
+          toast.success(`Cambiado por ${ejercicio(nuevo).nombre}, también en las próximas semanas`);
         }}
       />
     </div>

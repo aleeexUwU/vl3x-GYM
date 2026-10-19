@@ -53,7 +53,17 @@ export function sustituirEnPlan(plan: Plan, deId: string, aId: string): Plan {
     ...plan,
     dias: plan.dias.map((d) => ({
       ...d,
-      ejercicios: d.ejercicios.map((pe) =>
+      // Si el elegido ya estaba ese día, el quitado desaparece y sus series se suman al elegido.
+      ejercicios: (d.ejercicios.some((pe) => pe.exerciseId === aId) && d.ejercicios.some((pe) => pe.exerciseId === deId)
+        ? d.ejercicios
+            .filter((pe) => pe.exerciseId !== deId)
+            .map((pe) =>
+              pe.exerciseId === aId
+                ? { ...pe, series: Math.min(4, pe.series + d.ejercicios.find((x) => x.exerciseId === deId)!.series) }
+                : pe,
+            )
+        : d.ejercicios
+      ).map((pe) =>
         pe.exerciseId === deId
           ? {
               ...pe,

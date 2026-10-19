@@ -142,6 +142,31 @@ export default function Ajustes() {
             </ul>
           )}
         </Fila>
+        <Fila titulo="Ejercicios cambiados" ayuda="Los que cambiaste en la rutina o en una sesión: el cambio se mantiene las próximas semanas. Tócalo para deshacerlo.">
+          {Object.keys(ajustes.sustituciones ?? {}).length === 0 ? (
+            <p className="text-sm text-muted-foreground">Ninguno.</p>
+          ) : (
+            <ul className="flex flex-wrap gap-2">
+              {Object.entries(ajustes.sustituciones!).map(([de, a]) => (
+                <li key={de}>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="h-auto rounded-xl py-1.5 text-left whitespace-normal"
+                    aria-label={`Deshacer: volver a ${getEjercicio(de)?.nombre ?? de}`}
+                    onClick={() => {
+                      const resto = { ...ajustes.sustituciones };
+                      delete resto[de];
+                      void ajustesYRegenerar({ sustituciones: resto });
+                    }}
+                  >
+                    {getEjercicio(de)?.nombre ?? de} → {getEjercicio(a)?.nombre ?? a} <X />
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Fila>
       </Glass>
 
       <Glass className="space-y-3">

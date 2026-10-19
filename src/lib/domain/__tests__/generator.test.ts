@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { coberturaAbdominalesSemana } from "../abs-routine";
 import { EJERCICIOS, EJERCICIOS_GIMNASIO, ejercicio } from "../exercises";
-import { candidatos, filtroDe, generarPlan, PATRONES, repararPlan, type GeneratorInput } from "../generator";
+import { candidatos, filtroDe, generarPlan, PATRONES, registrarSustitucion, repararPlan, type GeneratorInput } from "../generator";
 import { detectarLimitaciones, ejercicioPermitido, requiereManoIzquierda } from "../limitations";
 import { EQUIPO_GIMNASIO_COMPLETO, GRUPOS, GRUPOS_GIMNASIO } from "../muscles";
 import { mejorAlternativaEnPlan, sustituirEnPlan } from "../substitution";
@@ -308,4 +308,39 @@ describe("la semana trabaja todos los músculos", () => {
       }
     });
   }
+});
+
+describe("los cambios de ejercicio se mantienen", () => {
+  it("al regenerar, el ejercicio quitado no vuelve y sale el elegido", () => {
+    const base = generarPlan(entrada([1, 3, 5]));
+    const ids = (p: ReturnType<typeof generarPlan>) => p.dias.flatMap((d) => d.ejercicios.map((e) => e.exerciseId));
+    expect(ids(base)).toContain("hip_thrust_maquina");
+    const plan = generarPlan(entrada([1, 3, 5], { sustituciones: { hip_thrust_maquina: "patada_gluteo_polea" } }));
+    expect(ids(plan)).not.toContain("hip_thrust_maquina");
+    expect(ids(plan)).toContain("patada_gluteo_polea");
+    for (const g of GRUPOS) expect(plan.cobertura[g], g).toBeGreaterThanOrEqual(plan.minimos![g] - 1e-9);
+    for (const d of plan.dias) expect(new Set(d.ejercicios.map((e) => e.exerciseId)).size).toBe(d.ejercicios.length);
+  });
+
+  it("si el elegido ya no está permitido, se ignora el cambio", () => {
+    const plan = generarPlan(entrada([1, 3, 5], { sustituciones: { hip_thrust_maquina: "hip_thrust_barra" } }));
+    expect(plan.dias.flatMap((d) => d.ejercicios.map((e) => e.exerciseId))).toContain("hip_thrust_maquina");
+  });
+
+  it("encadena y deshace cambios", () => {
+    let s = registrarSustitucion(undefined, "a", "b");
+    s = registrarSustitucion(s, "b", "c");
+    expect(s).toEqual({ a: "c", b: "c" });
+    s = registrarSustitucion(s, "c", "a");
+    expect(s).toEqual({ b: "a", c: "a" });
+  });
+
+  it("sustituir hacia uno que ya está ese día no lo duplica", () => {
+    const plan = generarPlan(entrada([1, 3, 5]));
+    const d = plan.dias.find((x) => x.ejercicios.length >= 2)!;
+    const [x, y] = d.ejercicios;
+    const nuevo = sustituirEnPlan(plan, x.exerciseId, y.exerciseId);
+    const dn = nuevo.dias.find((z) => z.diaSemana === d.diaSemana)!;
+    expect(dn.ejercicios.filter((e) => e.exerciseId === y.exerciseId)).toHaveLength(1);
+  });
 });

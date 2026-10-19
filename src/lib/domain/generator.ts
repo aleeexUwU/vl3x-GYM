@@ -1,6 +1,6 @@
 import { coberturaDeDias, sumarCobertura } from "./coverage";
 import { NOMBRE_DIA, ordenarDias } from "./dates";
-import { EJERCICIOS_GIMNASIO, ejercicio } from "./exercises";
+import { EJERCICIOS_GIMNASIO, ejercicio, getEjercicio } from "./exercises";
 import { ejercicioPermitido, tieneManoLimitada, type FiltroEjercicios } from "./limitations";
 import { coberturaVacia, GRUPO_NOMBRE, GRUPOS_GIMNASIO, GRUPOS_GRANDES, TREN_INFERIOR, TREN_SUPERIOR } from "./muscles";
 import type {
@@ -38,6 +38,8 @@ export interface GeneratorInput {
   prioridad?: Prioridad;
   /** Rango de repeticiones preferido (por defecto el de cada ejercicio). */
   rangoReps?: RangoReps;
+  /** Cambios que hizo la persona (ejercicio quitado → el que eligió): se respetan al regenerar. */
+  sustituciones?: Record<string, string>;
   id?: string;
   creadoEn?: string;
 }
@@ -475,9 +477,55 @@ export function generarPlan(input: GeneratorInput): Plan {
   });
 
   asegurarPatrones(sesiones, filtro);
+  aplicarSustituciones(sesiones, input, filtro);
 
-  const sinCubrir = completarCobertura(sesiones, input, filtro);
+  const sinCubrir = completarCobertura(sesiones, input, filtroConSustituciones(input, filtro));
   return construirPlan(sesiones, sinCubrir, input);
+}
+
+/** Sustituciones que se pueden aplicar (el elegido sigue permitido con el material y limitaciones). */
+function sustitucionesValidas(input: GeneratorInput, filtro: FiltroEjercicios): [string, string][] {
+  return Object.entries(input.sustituciones ?? {}).filter(([de, a]) => {
+    const e = getEjercicio(a);
+    return de !== a && !!e && ejercicioPermitido(e, filtro);
+  });
+}
+
+/** El ejercicio quitado no vuelve a salir solo al completar volumen. */
+function filtroConSustituciones(input: GeneratorInput, filtro: FiltroEjercicios): FiltroEjercicios {
+  const quitados = sustitucionesValidas(input, filtro).map(([de]) => de);
+  return quitados.length ? { ...filtro, excluidos: [...new Set([...filtro.excluidos, ...quitados])] } : filtro;
+}
+
+/** Cambia cada ejercicio quitado por el elegido (si ya estaba ese día, se suman las series). */
+function aplicarSustituciones(sesiones: Sesion[], input: GeneratorInput, filtro: FiltroEjercicios) {
+  for (const [de, a] of sustitucionesValidas(input, filtro)) {
+    const nuevo = ejercicio(a);
+    for (const s of sesiones) {
+      const i = s.items.findIndex((it) => it.ex.id === de);
+      if (i < 0) continue;
+      const ya = s.items.find((it) => it.ex.id === a);
+      if (ya) {
+        ya.series = Math.min(MAX_SERIES_EJERCICIO, ya.series + s.items[i].series);
+        s.items.splice(i, 1);
+      } else {
+        s.items[i] = { ex: nuevo, series: s.items[i].series, ultimoRecurso: nuevo.smith };
+      }
+    }
+  }
+}
+
+/**
+ * Apunta que la persona cambió `de` por `a`. Encadena (A→B y luego B→C deja A→C y B→C)
+ * y, si vuelve a elegir uno que había quitado, deja de quitarlo.
+ */
+export function registrarSustitucion(actuales: Record<string, string> | undefined, de: string, a: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(actuales ?? {})) out[k] = v === de ? a : v;
+  out[de] = a;
+  delete out[a];
+  for (const [k, v] of Object.entries(out)) if (k === v) delete out[k];
+  return out;
 }
 
 /**
@@ -520,6 +568,6 @@ export function repararPlan(plan: Plan, input: GeneratorInput): Plan {
       ultimoRecurso: !!pe.ultimoRecurso,
     })),
   }));
-  const sinCubrir = completarCobertura(sesiones, input, filtro);
+  const sinCubrir = completarCobertura(sesiones, input, filtroConSustituciones(input, filtro));
   return construirPlan(sesiones, sinCubrir, { ...input, id: plan.id, creadoEn: plan.creadoEn });
 }

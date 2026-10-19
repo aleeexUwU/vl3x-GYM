@@ -1,7 +1,7 @@
 import { coberturaAbdominalesSemana } from "@/lib/domain/abs-routine";
 import { hoyISO, inicioSemana } from "@/lib/domain/dates";
 import { ajustesPorDefecto } from "@/lib/domain/defaults";
-import { generarPlan, repararPlan, type GeneratorInput } from "@/lib/domain/generator";
+import { generarPlan, registrarSustitucion, repararPlan, type GeneratorInput } from "@/lib/domain/generator";
 import type { ArmAssessment } from "@/lib/domain/left-arm";
 import type { FiltroEjercicios } from "@/lib/domain/limitations";
 import { mejorAlternativaEnPlan, sustituirEnPlan } from "@/lib/domain/substitution";
@@ -47,6 +47,7 @@ export function entradaGenerador(
     evitarMancuernas: ajustes.evitarMancuernas,
     prioridad: ajustes.prioridad,
     rangoReps: ajustes.rangoReps ?? "auto",
+    sustituciones: ajustes.sustituciones,
     coberturaCasa: coberturaAbdominalesSemana(
       inicioSemana(hoy),
       ajustes.inicioAbdominales,
@@ -72,12 +73,17 @@ export async function regenerarPlan(): Promise<Plan> {
   return plan;
 }
 
-/** Sustituye un ejercicio en el plan y completa la cobertura si hiciera falta. */
+/**
+ * Sustituye un ejercicio en todos los días del plan y lo apunta en los ajustes para que
+ * el cambio se mantenga aunque la rutina se regenere.
+ */
 export async function sustituirEnPlanGuardado(deId: string, aId: string): Promise<Plan | null> {
-  const { perfil, ajustes, ev } = await contexto();
+  const ctx = await contexto();
+  const ajustes = { ...ctx.ajustes, sustituciones: registrarSustitucion(ctx.ajustes.sustituciones, deId, aId) };
+  await escribirKv("ajustes", ajustes);
   const plan = await leerKv("plan");
   if (!plan) return null;
-  const nuevo = repararPlan(sustituirEnPlan(plan, deId, aId), entradaGenerador(perfil, ajustes, ev));
+  const nuevo = repararPlan(sustituirEnPlan(plan, deId, aId), entradaGenerador(ctx.perfil, ajustes, ctx.ev));
   await escribirKv("plan", nuevo);
   return nuevo;
 }
