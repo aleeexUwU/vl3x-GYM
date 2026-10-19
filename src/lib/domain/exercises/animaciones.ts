@@ -8,7 +8,8 @@ import { ANIMACION_BILATERAL } from "./bilateral";
  *
  * Emparejado a mano con el ejercicio más parecido. Varias son a dos brazos o con otro
  * apoyo: la técnica a una mano está en los pasos y en Consejos. Los que no tienen
- * equivalente (plancha, vacío, belt squat...) siguen con fotos o ilustración.
+ * equivalente (belt squat...) siguen con fotos; los de core sin animación libre usan
+ * muñecos propios (components/exercise/muneco-core.tsx).
  */
 const ANIMACION: Record<string, string> = {
   // Pecho
@@ -109,8 +110,10 @@ const ANIMACION: Record<string, string> = {
   plancha_lateral_izquierda: "RKjH6Lt",
   dead_bug: "iny3m5y",
   pallof_banda: "9pa4H5m",
-  patadas_aleteo: "UVo2Qs2",
   nadador: "SP3hUez",
+  superman: "SP3hUez",
+  plancha_un_brazo_rodillas: "h1ezqSu",
+  plancha_un_brazo: "yRpV5TC",
   puente_gluteo: "u0cNiij",
   puente_gluteo_una_pierna_casa: "rmEukuS",
   ...ANIMACION_BILATERAL,

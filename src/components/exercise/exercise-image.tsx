@@ -8,6 +8,7 @@ import type { Exercise } from "@/lib/domain/types";
 import { cn } from "@/lib/utils";
 import { Ilustracion } from "./illustration";
 import { MapaMuscular } from "./mapa-muscular";
+import { MUNECO_CORE, MunecoCore } from "./muneco-core";
 
 /** Fases de una repetición, en el mismo orden y reparto que la animación `rep-*` de globals.css. */
 const FASES = ["Inicio", "Contrae", "Aprieta", "Vuelve despacio"] as const;
@@ -31,6 +32,18 @@ export function ExerciseImage(props: Props) {
   const { ejercicio, className, animar = true, detalle = false } = props;
   const gif = animacionDe(ejercicio);
   const [fallo, setFallo] = useState(false);
+  const muneco = MUNECO_CORE[ejercicio.id];
+
+  if (muneco) {
+    const figura = <MunecoCore clave={muneco} nombre={ejercicio.nombre} className="size-full" />;
+    if (!detalle) return <div className={cn("anim-ej overflow-hidden rounded-xl", className)}>{figura}</div>;
+    return (
+      <div className={cn("grid grid-cols-[minmax(0,1fr)_8.5rem] gap-2", className)}>
+        <div className="anim-ej aspect-square overflow-hidden rounded-2xl">{figura}</div>
+        <MapaMuscular ejercicio={ejercicio} className="h-full" />
+      </div>
+    );
+  }
 
   if (!gif || fallo) {
     if (!detalle) return <FotosEjercicio {...props} />;
