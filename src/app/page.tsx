@@ -28,6 +28,8 @@ import { Aviso, Cargando, Glass, PageHeader, SectionTitle } from "@/components/u
 import { Logo } from "@/components/kakugan";
 import { AvisoSync } from "@/components/aviso-sync";
 import { ResumenHoy } from "@/components/resumen-hoy";
+import { InsigniaRango } from "@/components/rangos";
+import { calcularRangos } from "@/lib/domain/rangos";
 import { WeekStrip } from "@/components/week-strip";
 import { enDescarga, iniciarWorkout, logsDeWorkouts, semanaPrograma } from "@/lib/app/gimnasio";
 import {
@@ -141,6 +143,14 @@ export default function Gimnasio() {
           <p className="mt-1 text-sm text-muted-foreground">
             Semana {semanas + 1} de entreno{semanas === 0 && ": calibrando tus pesos"}
           </p>
+          {(() => {
+            const general = calcularRangos(logsDeWorkouts(workouts)).general;
+            return general ? (
+              <Link href="/progreso/?tab=rangos" className="mt-2 inline-flex items-center gap-2 text-xs text-muted-foreground" aria-label={`Rango general: ${general.rango}. Ver rangos`}>
+                <InsigniaRango nivel={general} /> {Math.round(general.progreso * 100)} % hacia el siguiente
+              </Link>
+            ) : null;
+          })()}
       </div>
 
       <AvisoSync />

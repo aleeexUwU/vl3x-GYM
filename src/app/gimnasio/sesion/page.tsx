@@ -27,6 +27,10 @@ import { Kakugan } from "@/components/kakugan";
 import { ConsejosSheet, NotaEjercicio, TecnicaSheet } from "@/components/exercise/technique";
 import { Calentamiento } from "@/components/gym/calentamiento";
 import { Dropset } from "@/components/gym/dropset";
+import { InsigniaRango } from "@/components/rangos";
+import { GRUPO_NOMBRE } from "@/lib/domain/muscles";
+import { calcularRangos, subidas } from "@/lib/domain/rangos";
+import type { MuscleGroup } from "@/lib/domain/types";
 import { MaquinaDialog } from "@/components/gym/maquina-dialog";
 import { SustituirDialog } from "@/components/gym/sustituir-dialog";
 import { FlashSangre } from "@/components/flash-sangre";
@@ -761,6 +765,31 @@ function Resumen({ workout, previos }: { workout: Workout; previos: ReturnType<t
         <Stat etiqueta="Volumen" valor={`${Math.round(volumen)}`} detalle="kg × reps" color="violet" />
         <Stat etiqueta="Tiempo" valor={minutos ?? "—"} detalle="min" color="lime" />
       </div>
+      {(() => {
+          const antes = calcularRangos(previos.filter((l) => l.fecha <= workout.fecha));
+          const despues = calcularRangos([...previos.filter((l) => l.fecha <= workout.fecha), ...logsDeWorkouts([workout])]);
+          const lista = subidas(antes, despues);
+          if (!lista.length) return null;
+          const nombre = (s: (typeof lista)[number]) =>
+            s.tipo === "general" ? "Rango general" : s.tipo === "musculo" ? GRUPO_NOMBRE[s.id as MuscleGroup] : ejercicio(s.id).nombre;
+          return (
+            <Glass className="space-y-2">
+              <p className="font-semibold">Rangos que han subido</p>
+              <ul className="space-y-1.5 text-sm">
+                {lista
+                  .sort((a, b) => ["general", "musculo", "ejercicio"].indexOf(a.tipo) - ["general", "musculo", "ejercicio"].indexOf(b.tipo))
+                  .map((s) => (
+                    <li key={s.tipo + s.id} className="flex items-center justify-between gap-2">
+                      <span className="min-w-0 truncate">{nombre(s)}</span>
+                      <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
+                        {s.de ? `${s.de} →` : "Nuevo:"} <InsigniaRango nivel={{ rango: s.a, indice: 0, puntuacion: 0, progreso: 0 }} />
+                      </span>
+                    </li>
+                  ))}
+              </ul>
+            </Glass>
+          );
+        })()}
       {records.length > 0 && (
         <Glass>
           <p className="mb-2 font-semibold">Nuevos récords (1RM estimado)</p>

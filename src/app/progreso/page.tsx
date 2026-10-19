@@ -17,6 +17,9 @@ import { clavesHechas, fechasDe } from "@/lib/app/resumen";
 import { useAbsSessions, useAjustes, useArmSessions, useBodyweights, useComidas, usePerfil, usePlan, useWorkouts } from "@/lib/db/hooks";
 import { objetivosDiarios } from "@/lib/domain/nutrition/objetivos";
 import { ResumenSemana } from "@/components/resumen-semana";
+import { PanelRangos } from "@/components/rangos";
+import { logsDeWorkouts } from "@/lib/app/gimnasio";
+import { calcularRangos } from "@/lib/domain/rangos";
 import { borrar, guardar, nuevoId } from "@/lib/db/repo";
 import type { BodyWeight } from "@/lib/db/types";
 import { formatoFecha, hoyISO, inicioSemana, sumarDias } from "@/lib/domain/dates";
@@ -65,6 +68,7 @@ function Progreso() {
         <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1.5 bg-transparent p-0 group-data-horizontal/tabs:h-auto">
           {[
             ["resumen", "Resumen"],
+            ["rangos", "Rangos"],
             ["calendario", "Calendario"],
             ["graficas", "Gráficas"],
             ["historial", "Historial"],
@@ -76,6 +80,10 @@ function Progreso() {
             </TabsTrigger>
           ))}
         </TabsList>
+
+        <TabsContent value="rangos" className="mt-4">
+          <PanelRangos rangos={calcularRangos(logsDeWorkouts(workouts))} />
+        </TabsContent>
 
         <TabsContent value="resumen" className="mt-4 space-y-4">
           <ResumenSemana
@@ -293,7 +301,7 @@ function Progreso() {
             </form>
             {pesos.length > 0 ? (
               <>
-                <GraficaLineas datos={pesos.map((p) => ({ fecha: p.fecha, kg: p.kg }))} x="fecha" unidad="kg" series={[{ clave: "kg", nombre: "Peso", color: "1" }]} />
+                <GraficaLineas datos={pesos.map((p) => ({ fecha: p.fecha, kg: p.kg }))} x="fecha" unidad="kg" ajustarEje series={[{ clave: "kg", nombre: "Peso", color: "1" }]} />
                 <ul className="space-y-1 text-sm">
                   {[...pesos].reverse().slice(0, 6).map((p) => (
                     <li key={p.id} className="flex items-center justify-between rounded-xl bg-secondary/50 px-3 py-1.5">

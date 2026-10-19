@@ -33,7 +33,7 @@ export function totales(comidas: Comida[]): Nutrientes {
  */
 export async function iaDisponible(): Promise<{ ok: boolean; motivo?: string }> {
   if (!supabaseConfigurado) return { ok: false, motivo: "La IA necesita Supabase configurado." };
-  if (typeof navigator !== "undefined" && !navigator.onLine) return { ok: false, motivo: "Sin conexión." };
+  if (typeof navigator !== "undefined" && navigator.onLine === false) return { ok: false, motivo: "Sin conexión." };
   const sb = supabase()!;
   const { data } = await sb.auth.getSession();
   const email = data.session?.user.email?.toLowerCase();

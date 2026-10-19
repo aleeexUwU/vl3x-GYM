@@ -58,7 +58,7 @@ export async function sincronizar(): Promise<void> {
     const { data: sesion } = await sb.auth.getSession();
     const uid = sesion.session?.user.id;
     if (!uid) return setEstado({ tipo: "sin_sesion" });
-    if (typeof navigator !== "undefined" && !navigator.onLine) return;
+    if (typeof navigator !== "undefined" && navigator.onLine === false) return;
     setEstado({ tipo: "sincronizando" });
     try {
       await bajar(uid);

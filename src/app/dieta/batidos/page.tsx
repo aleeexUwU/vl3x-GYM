@@ -40,7 +40,7 @@ export default function Batidos() {
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-heading text-xl leading-tight tracking-wide">{r.nombre}</p>
                   <p className="text-xs tabular-nums text-muted-foreground">
-                    <strong className="text-foreground">{kcal} kcal</strong> · {proteinas} g proteína · {r.items.length} ingredientes
+                    <strong className="text-foreground">{kcal} kcal</strong> · {proteinas} g proteína · {r.items.length} {r.items.length === 1 ? "ingrediente" : "ingredientes"}
                     {r.usos > 0 && ` · usado ${r.usos} ${r.usos === 1 ? "vez" : "veces"}`}
                   </p>
                   <p className="mt-0.5 truncate text-xs text-muted-foreground">{r.items.map((i) => i.nombre).join(", ")}</p>

@@ -90,12 +90,15 @@ export function GraficaLineas({
   series,
   unidad,
   alto = 220,
+  ajustarEje = false,
 }: {
   datos: Fila[];
   x: string;
   series: Serie[];
   unidad?: string;
   alto?: number;
+  /** El eje Y se ajusta a los datos (no empieza en 0): para el peso corporal, donde importan las décimas. */
+  ajustarEje?: boolean;
 }) {
   return (
     <figure>
@@ -104,7 +107,12 @@ export function GraficaLineas({
           <LineChart data={datos} margin={{ top: 8, right: 8, bottom: 0, left: -18 }}>
             <CartesianGrid stroke="var(--border)" vertical={false} />
             <XAxis dataKey={x} tickFormatter={fechaCorta} {...eje} minTickGap={24} />
-            <YAxis {...eje} width={44} allowDecimals={false} />
+            <YAxis
+              {...eje}
+              width={44}
+              allowDecimals={ajustarEje}
+              domain={ajustarEje ? [(min: number) => Math.floor(min - 1), (max: number) => Math.ceil(max + 1)] : undefined}
+            />
             <Tooltip
               cursor={{ stroke: "var(--muted-foreground)", strokeDasharray: "3 3" }}
               content={<Consejo unidad={unidad} etiquetaX={fechaCorta} />}
