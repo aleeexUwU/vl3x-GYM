@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { coberturaAbdominalesSemana } from "../abs-routine";
 import { EJERCICIOS, EJERCICIOS_GIMNASIO, ejercicio } from "../exercises";
-import { candidatos, generarPlan, repararPlan, type GeneratorInput } from "../generator";
+import { candidatos, filtroDe, generarPlan, PATRONES, repararPlan, type GeneratorInput } from "../generator";
 import { detectarLimitaciones, ejercicioPermitido, requiereManoIzquierda } from "../limitations";
 import { EQUIPO_GIMNASIO_COMPLETO, GRUPOS, GRUPOS_GIMNASIO } from "../muscles";
 import { mejorAlternativaEnPlan, sustituirEnPlan } from "../substitution";
@@ -285,4 +285,27 @@ describe("sin limitaciones, la espalda va con ejercicios clásicos", () => {
     const ids = plan.dias.flatMap((d) => d.ejercicios.map((pe) => pe.exerciseId));
     expect(ids.filter((id) => id.startsWith("jalon_polea_una_mano") || id === "remo_mancuerna_pecho_apoyado")).toEqual([]);
   });
+});
+
+describe("la semana trabaja todos los músculos", () => {
+  const EQUIPO_ALEX: Equipment[] = ["mancuernas", "banco", "banco_inclinable", "polea", "prensa", "hack_squat", "extension_cuadriceps", "curl_femoral", "hip_thrust_maquina", "abductor_maquina", "aductor_maquina", "gemelo_maquina", "banco_hiperextensiones", "press_pecho_maquina", "press_hombro_maquina", "contractora", "remo_maquina", "curl_biceps_maquina", "kettlebell", "banda_elastica", "cinturon_lastre", "esterilla"];
+  const casos: [string, GeneratorInput][] = [
+    ...CONFIGS.map(([n, d]) => [n, entrada(d)] as [string, GeneratorInput]),
+    ...CONFIGS.map(([n, d]) => [`${n} sin limitaciones`, entrada(d, { limitaciones: [] })] as [string, GeneratorInput]),
+    ["config de Alex", entrada([6, 0, 2], { equipo: EQUIPO_ALEX, evitarMancuernas: true, prioridad: "superior", duracionMin: 75 })],
+  ];
+  for (const [nombre, input] of casos) {
+    it(`${nombre}: cada grupo con ejercicio directo, su mínimo y los patrones clave`, () => {
+      const plan = generarPlan(input);
+      const ids = plan.dias.flatMap((d) => d.ejercicios.map((e) => e.exerciseId));
+      for (const g of GRUPOS_GIMNASIO) {
+        expect(ids.some((id) => (ejercicio(id).musculos[g] ?? 0) >= 1), `${g} directo`).toBe(true);
+      }
+      for (const g of GRUPOS) expect(plan.cobertura[g], g).toBeGreaterThanOrEqual(plan.minimos![g] - 1e-9);
+      for (const p of PATRONES) {
+        const posible = candidatos(p.grupo, filtroDe(input)).lista.some((e) => p.ids.includes(e.id));
+        if (posible) expect(ids.some((id) => p.ids.includes(id)), `${p.nombre}`).toBe(true);
+      }
+    });
+  }
 });

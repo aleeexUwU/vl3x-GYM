@@ -45,7 +45,7 @@ export interface GeneratorInput {
 export type Prioridad = "superior" | "equilibrado";
 
 /** Versión del generador: si un plan guardado es de una versión anterior, se regenera. */
-export const VERSION_PLAN = 5;
+export const VERSION_PLAN = 6;
 
 export const MAX_SERIES_EJERCICIO = 4;
 
@@ -474,8 +474,38 @@ export function generarPlan(input: GeneratorInput): Plan {
     if (e) s.items.push({ ex: e, series: SERIES_INICIALES, ultimoRecurso: c.ultimoRecurso });
   });
 
+  asegurarPatrones(sesiones, filtro);
+
   const sinCubrir = completarCobertura(sesiones, input, filtro);
   return construirPlan(sesiones, sinCubrir, input);
+}
+
+/**
+ * Movimientos que un músculo necesita además del "suyo" de siempre: contar series no basta
+ * si toda la espalda sale de remos (el dorsal también necesita tirar en vertical), el
+ * cuádriceps solo de prensas (el recto femoral se trabaja de verdad con la extensión) o el
+ * tríceps solo de empujes (la cabeza larga crece más estirada, por encima de la cabeza).
+ */
+export const PATRONES: { grupo: MuscleGroup; nombre: string; ids: string[] }[] = [
+  { grupo: "dorsal", nombre: "tirón vertical", ids: ["jalon_maquina_una_mano", "jalon_pecho", "dominadas", "jalon_polea_una_mano", "pullover_polea_una_mano"] },
+  { grupo: "dorsal", nombre: "remo", ids: ["remo_maquina_una_mano", "remo_maquina", "remo_polea_sentado", "remo_polea_baja_una_mano", "remo_polea_alta_arrodillado", "remo_barra", "remo_mancuerna_pecho_apoyado", "remo_banda_una_mano"] },
+  { grupo: "cuadriceps", nombre: "extensión de cuádriceps", ids: ["extension_cuadriceps"] },
+  { grupo: "triceps", nombre: "tríceps por encima de la cabeza", ids: ["extension_triceps_overhead_polea", "extension_triceps_overhead_mancuerna", "press_frances"] },
+];
+
+/** Si falta algún patrón en la semana y hay con qué hacerlo, lo añade a la sesión más corta que entrene ese grupo. */
+function asegurarPatrones(sesiones: Sesion[], filtro: FiltroEjercicios) {
+  for (const p of PATRONES) {
+    if (sesiones.some((s) => s.items.some((it) => p.ids.includes(it.ex.id)))) continue;
+    const c = candidatos(p.grupo, filtro);
+    const opciones = c.lista.filter((e) => p.ids.includes(e.id));
+    const destino = sesiones
+      .filter((s) => gruposDe(s.enfoque).includes(p.grupo))
+      .sort((a, b) => minutosSesion(a) - minutosSesion(b))[0];
+    if (!opciones.length || !destino) continue;
+    const e = elegir(opciones, destino, 0, filtro);
+    if (e) destino.items.push({ ex: e, series: SERIES_INICIALES, ultimoRecurso: c.ultimoRecurso });
+  }
 }
 
 /** Vuelve a completar la cobertura de un plan ya editado (tras sustituir un ejercicio). */
